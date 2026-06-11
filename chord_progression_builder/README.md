@@ -47,7 +47,8 @@ clip with one click.
 
 ## Install
 
-1. Download `Chord-Progression-Builder-1.0.0.ablx`.
+1. Download `Chord-Progression-Builder-1.0.0.ablx` from the
+   [**Releases page**](https://github.com/notacap/ableton-extensions/releases).
 2. In Live, open **Preferences → Extensions**.
 3. Drag the `.ablx` file into the Extensions list (or use the install button).
 4. Right-click any **MIDI track** and choose **Build Chord Progression…**.
