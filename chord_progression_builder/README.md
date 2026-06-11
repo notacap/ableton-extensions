@@ -9,7 +9,7 @@ to your Live Set's key and scale. Pick chords, color them with extensions, shape
 voicings and rhythm, hear it play back at your project tempo, then write it to a looped
 clip with one click.
 
-![Chord Progression Builder](documentation/user_interface.png)
+![Chord Progression Builder](documentation/ui.png)
 
 ## Features
 
