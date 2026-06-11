@@ -9,7 +9,7 @@ to your Live Set's key and scale. Pick chords, color them with extensions, shape
 voicings and rhythm, hear it play back at your project tempo, then write it to a looped
 clip with one click.
 
-![Chord Progression Builder](documentation/screenshot.png)
+![Chord Progression Builder](documentation/user_interface.png)
 
 ## Features
 
@@ -31,6 +31,15 @@ clip with one click.
   Electric Piano, or Synth sounds and a sweeping playhead.
 - **One-click write** — drops a single looped MIDI clip into the first empty slot
   (and adds a scene if the track is full, so the write never fails).
+
+## Screenshots
+
+| | |
+|---|---|
+| **30+ genre presets** | **Opens in your Set's key & 8 modes** |
+| ![Presets](documentation/presets.png) | ![Key & modes](documentation/key.png) |
+| **8 rhythm patterns** | **Preview sounds** |
+| ![Rhythm patterns](documentation/preview_rhythms.png) | ![Sounds](documentation/preview_sounds.png) |
 
 ## Requirements
 
@@ -68,10 +77,10 @@ npm run start       # build:dev + launch in Live (needs Live running + EXTENSION
 
 ## Credits
 
-Built by **hello nocap** with the
+Built by **hello_nocap** with the
 [`@ableton-extensions/sdk`](https://www.ableton.com/) and the
 [`tonal`](https://github.com/tonaljs/tonal) music-theory library.
 
 ## License
 
-_Add your chosen license here (e.g. MIT) before distributing._
+Released under the [MIT License](LICENSE) © 2026 hello_nocap.
