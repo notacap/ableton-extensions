@@ -15,3 +15,7 @@ vendor/*.tgz
 .DS_Store
 Thumbs.db
 .vscode/
+
+prompts/
+
+extensions-sdk-1.0.0-beta.0/
