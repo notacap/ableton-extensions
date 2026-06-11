@@ -3,3 +3,6 @@ dist/
 *.ablx
 .env
 download/
+*.tgz
+prompts/
+CLAUDE.md
