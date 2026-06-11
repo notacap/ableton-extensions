@@ -1,0 +1,17 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.ablx
+
+# SDK tarballs (not committed — note required version in README)
+vendor/*.tgz
+
+# local env (Extension Host path is machine-specific)
+.env
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
