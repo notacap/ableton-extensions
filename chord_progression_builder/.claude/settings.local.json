@@ -25,7 +25,9 @@
       "PowerShell(Set-Content *)",
       "PowerShell(npx tsc --noEmit)",
       "PowerShell(npm run *)",
-      "PowerShell(node _selftest.mjs)"
+      "PowerShell(node _selftest.mjs)",
+      "Bash(tar -tzf Chord-Progression-Builder-1.0.0.ablx)",
+      "Bash(unzip -l Chord-Progression-Builder-1.0.0.ablx)"
     ]
   },
   "disabledMcpjsonServers": [

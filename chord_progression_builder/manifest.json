@@ -1,6 +1,6 @@
 {
   "name": "Chord Progression Builder",
-  "author": "Christopher Dissette",
+  "author": "hello nocap",
   "entry": "dist/extension.js",
   "version": "1.0.0",
   "minimumApiVersion": "1.0.0"
