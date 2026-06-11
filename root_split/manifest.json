@@ -1,0 +1,7 @@
+{
+  "name": "Root Split",
+  "author": "hello_nocap",
+  "entry": "dist/extension.js",
+  "version": "1.0.0",
+  "minimumApiVersion": "1.0.0"
+}
