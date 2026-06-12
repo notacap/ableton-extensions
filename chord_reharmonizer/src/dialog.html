@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Chord Reharmonizer</title>
+<style>
+  :root {
+    /* ── Nebula theme ───────────────────────────────────
+       Deep-space indigo chrome; the 12 chord hues are the
+       stars. Violet = commit, comet-ice = transport.      */
+    --bg: #07040f;
+    --bg-2: #150d31;
+    --surface: rgba(255,255,255,0.045);
+    --surface-2: rgba(255,255,255,0.085);
+    --input-bg: rgba(8,4,22,0.65);
+    --border: rgba(255,255,255,0.13);
+    --border-soft: rgba(255,255,255,0.07);
+    --text: #ece8fb;
+    --text-dim: #9b8fc7;
+    --accent: #c9a6ff;        /* nebula violet — commit actions */
+    --accent-2: #ff8bd6;      /* magenta flare */
+    --accent-ink: #1c0b33;
+    --play: #7fd8ff;          /* comet ice — listen/transport */
+    --play-ink: #03222e;
+    --glow: rgba(201,166,255,0.32);
+    --star: #ffe3a8;          /* suggestion star */
+    --h: 270;                 /* fallback chord hue */
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 12px; user-select: none;
+  }
+  body {
+    display: flex; flex-direction: column; padding: 12px 14px; gap: 10px;
+    background: linear-gradient(170deg, var(--bg) 0%, var(--bg-2) 135%);
+    overflow: hidden;
+  }
+  /* Drifting nebula — gas clouds in slow orbit. */
+  body::before {
+    content: ""; position: fixed; inset: -40%;
+    background:
+      radial-gradient(36% 32% at 22% 28%, rgba(168,92,255,0.16), transparent 70%),
+      radial-gradient(30% 34% at 80% 20%, rgba(255,92,180,0.12), transparent 70%),
+      radial-gradient(34% 30% at 72% 82%, rgba(72,150,255,0.13), transparent 70%),
+      radial-gradient(26% 28% at 14% 80%, rgba(64,220,235,0.10), transparent 70%);
+    animation: nebula 52s ease-in-out infinite alternate;
+    pointer-events: none; z-index: 0;
+  }
+  @keyframes nebula {
+    0%   { transform: rotate(0deg)   scale(1.00); }
+    50%  { transform: rotate(-6deg)  scale(1.12); }
+    100% { transform: rotate(5deg)   scale(1.05); }
+  }
+  /* Starfield — pinpricks that breathe. */
+  body::after {
+    content: ""; position: fixed; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 11% 18%, rgba(255,255,255,0.9), transparent 60%),
+      radial-gradient(1px 1px at 28% 64%, rgba(255,255,255,0.6), transparent 60%),
+      radial-gradient(2px 2px at 41% 32%, rgba(255,255,255,0.5), transparent 60%),
+      radial-gradient(1px 1px at 55% 75%, rgba(255,255,255,0.7), transparent 60%),
+      radial-gradient(1px 1px at 63% 12%, rgba(255,255,255,0.8), transparent 60%),
+      radial-gradient(2px 2px at 74% 48%, rgba(255,255,255,0.45), transparent 60%),
+      radial-gradient(1px 1px at 86% 26%, rgba(255,255,255,0.7), transparent 60%),
+      radial-gradient(1px 1px at 92% 68%, rgba(255,255,255,0.6), transparent 60%),
+      radial-gradient(1px 1px at 18% 88%, rgba(255,255,255,0.5), transparent 60%),
+      radial-gradient(1px 1px at 48% 92%, rgba(255,255,255,0.6), transparent 60%);
+    animation: twinkle 8s ease-in-out infinite alternate;
+    pointer-events: none; z-index: 0;
+  }
+  @keyframes twinkle { from { opacity: .35; } to { opacity: .9; } }
+  body > * { position: relative; z-index: 1; }
+
+  /* ── Header ─────────────────────────────────────────── */
+  .header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .title {
+    font-size: 15px; font-weight: 700; letter-spacing: .02em;
+    background: linear-gradient(90deg, #c9a6ff, #ff8bd6 50%, #7fd8ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .clip-badge {
+    background: var(--surface); color: var(--text-dim);
+    border: 1px solid var(--border-soft); border-radius: 999px;
+    font-size: 10px; padding: 2px 9px;
+  }
+  .live-badge {
+    background: rgba(127,216,255,0.10); color: var(--play);
+    border: 1px solid rgba(127,216,255,0.28); border-radius: 999px;
+    font-size: 10px; padding: 2px 9px;
+  }
+  .hidden { display: none !important; }
+  .spacer-h { margin-left: auto; }
+  .field { display: flex; align-items: center; gap: 5px; }
+  .field label { color: var(--text-dim); font-size: 11px; }
+  select {
+    background: var(--input-bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 7px;
+    padding: 4px 6px; font-size: 12px; outline: none; max-width: 200px;
+  }
+  .toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+  .toggle input { accent-color: var(--accent); }
+
+  /* ── Panels ─────────────────────────────────────────── */
+  .panel { background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px; padding: 10px 11px; }
+  .panel-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+  .panel-head h2 { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-dim); margin: 0; font-weight: 600; }
+  .panel-head .hint { font-size: 10px; color: var(--text-dim); opacity: .8; font-style: italic; }
+  .mini-btn {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 999px; padding: 2px 10px; cursor: pointer; font-size: 10px;
+  }
+  .mini-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  /* ── Timeline ───────────────────────────────────────── */
+  #timeArea { position: relative; cursor: crosshair; touch-action: none; }
+  #ruler { position: relative; height: 15px; margin-bottom: 2px; }
+  #ruler .bar { position: absolute; top: 0; bottom: 0; border-left: 1px solid rgba(255,255,255,0.22); padding-left: 4px; color: var(--text-dim); font-size: 9px; pointer-events: none; }
+  #ruler .beat { position: absolute; top: 8px; bottom: 0; border-left: 1px solid rgba(255,255,255,0.08); pointer-events: none; }
+  #track { position: relative; height: 58px; background: var(--input-bg); border-radius: 9px; overflow: hidden; border: 1px solid var(--border-soft); }
+  /* Blocks are display-only: pointer-events off so they can never hijack a drag.
+     Selection is hit-tested in JS by beat position instead. */
+  .blk {
+    position: absolute; top: 4px; bottom: 4px; border-radius: 8px;
+    background: linear-gradient(160deg, hsla(var(--h),58%,58%,0.30), hsla(var(--h),58%,38%,0.10));
+    border: 1px solid hsla(var(--h),58%,66%,0.45);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    overflow: hidden; pointer-events: none;
+    transition: opacity .15s, filter .15s;
+  }
+  .blk .nm { font-weight: 700; font-size: 11px; white-space: nowrap; color: hsl(var(--h),80%,86%); }
+  .blk .rm { font-size: 9px; color: hsla(var(--h),50%,76%,0.9); }
+  .blk.muted { opacity: .18; filter: grayscale(.7); }
+  .blk.playing { box-shadow: 0 0 0 1px hsla(var(--h),80%,72%,0.9), 0 0 16px hsla(var(--h),80%,62%,0.5); }
+
+  /* Selection overlay spans ruler + track; only handles/body take pointer events. */
+  #selOverlay { position: absolute; top: 0; bottom: 0; pointer-events: none; display: none; z-index: 5; }
+  #selOverlay .body {
+    position: absolute; top: 0; bottom: 0; left: 0; right: 0;
+    background: rgba(201,166,255,0.10);
+    border-top: 2px solid var(--accent);
+    border-bottom: 2px solid var(--accent);
+    border-radius: 2px;
+    pointer-events: auto; cursor: grab; z-index: 1;
+  }
+  #selOverlay .body:active { cursor: grabbing; }
+  /* Ghost row — your rewrite, previewed in place over the dimmed originals. */
+  #ghostRow {
+    position: absolute; left: 2px; right: 2px; top: 20px; bottom: 7px;
+    display: flex; gap: 3px; pointer-events: none; z-index: 2;
+  }
+  #selOverlay.dragging #ghostRow { display: none; }
+  .ghost {
+    border-radius: 7px; min-width: 0; overflow: hidden;
+    background: linear-gradient(160deg, hsla(var(--h),65%,62%,0.55), hsla(var(--h),65%,42%,0.25));
+    border: 1px solid hsla(var(--h),80%,74%,0.85);
+    box-shadow: 0 0 9px hsla(var(--h),70%,60%,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 10px; color: hsl(var(--h),85%,90%);
+    white-space: nowrap;
+  }
+  .ghost.orig-ghost { border-style: dashed; opacity: .85; }
+  .ghost.playing { box-shadow: 0 0 0 1px hsla(var(--h),85%,78%,1), 0 0 18px hsla(var(--h),85%,65%,0.65); }
+  .ghost-empty {
+    flex: 1; border-radius: 7px; border: 1px dashed rgba(255,255,255,0.25);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-dim); font-size: 10px; font-style: italic;
+  }
+  #selOverlay .handle {
+    position: absolute; top: 0; bottom: 0; width: 16px; z-index: 6;
+    pointer-events: auto; cursor: ew-resize;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #selOverlay .handle.left { left: -8px; }
+  #selOverlay .handle.right { right: -8px; }
+  #selOverlay .handle::before {
+    content: ""; width: 5px; height: 100%;
+    background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    box-shadow: 0 0 8px var(--glow);
+    border-radius: 3px;
+  }
+  #selOverlay .handle::after {
+    content: "⋮"; position: absolute; color: var(--accent-ink);
+    font-size: 12px; font-weight: 700; line-height: 1;
+  }
+  /* Playhead — a comet sweeping the strip while you listen. */
+  #playline {
+    position: absolute; top: 0; bottom: 0; width: 2px; display: none;
+    background: linear-gradient(180deg, var(--play), rgba(127,216,255,0.1));
+    box-shadow: 0 0 9px rgba(127,216,255,0.8);
+    pointer-events: none; z-index: 9;
+  }
+  .sel-info { font-size: 10px; color: var(--text-dim); }
+
+  /* ── Middle grid ────────────────────────────────────── */
+  #mid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 10px; flex: 1; min-height: 0; }
+  .col { display: flex; flex-direction: column; min-height: 0; }
+
+  /* ── Rewrite cards ──────────────────────────────────── */
+  #cards { display: flex; flex-wrap: wrap; gap: 7px; align-content: flex-start; min-height: 64px; flex: 1; overflow-y: auto; }
+  .card {
+    position: relative; width: 96px; min-height: 72px;
+    background: linear-gradient(160deg, hsla(var(--h),55%,58%,0.24), hsla(var(--h),55%,40%,0.08));
+    border: 1px solid hsla(var(--h),55%,65%,0.45);
+    border-radius: 10px; padding: 7px 8px 6px; cursor: grab;
+    display: flex; flex-direction: column; gap: 2px;
+    transition: border-color .12s, box-shadow .12s, transform .12s;
+  }
+  .card:hover { transform: translateY(-1px); }
+  .card.selected {
+    border-color: hsla(var(--h),80%,74%,0.95);
+    box-shadow: 0 0 0 1px hsla(var(--h),80%,74%,0.85), 0 0 14px hsla(var(--h),70%,60%,0.30);
+  }
+  .card.playing { animation: cardPulse 1s ease-in-out infinite; transform: translateY(-2px); }
+  @keyframes cardPulse {
+    0%, 100% { box-shadow: 0 0 0 1px hsla(var(--h),80%,72%,0.9), 0 0 12px hsla(var(--h),80%,62%,0.35); }
+    50%      { box-shadow: 0 0 0 2px hsla(var(--h),85%,76%,1.0), 0 0 24px hsla(var(--h),85%,65%,0.55); }
+  }
+  .card.orig-card { border-style: dashed; }
+  .card.dragover { border-color: var(--star); }
+  .card .c-name { font-size: 13px; font-weight: 700; color: hsl(var(--h),80%,86%); }
+  .card .c-roman { font-size: 9px; color: hsla(var(--h),55%,76%,0.85); }
+  .card .voice-strip { display: flex; gap: 2px; margin-top: auto; padding-top: 3px; height: 13px; align-items: flex-end; }
+  .card .voice-strip span { flex: 1; background: hsl(var(--h),65%,68%); border-radius: 1px; opacity: .7; }
+  .card .beats-tag {
+    position: absolute; bottom: 3px; right: 5px; font-size: 9px;
+    color: var(--text-dim); background: var(--input-bg);
+    border-radius: 3px; padding: 0 3px;
+  }
+  .card .x {
+    position: absolute; top: 2px; right: 4px; width: 14px; height: 14px;
+    line-height: 13px; text-align: center; border-radius: 3px;
+    color: var(--text-dim); font-size: 11px; cursor: pointer;
+  }
+  .card .x:hover { background: #3a2240; color: #ffc2e0; }
+  .cards-empty { color: var(--text-dim); font-style: italic; padding: 18px 6px; font-size: 11px; }
+
+  /* ── Inspector (selected card editor) — plain words, no mystery glyphs ── */
+  .inspector {
+    margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .insp-head { display: flex; align-items: center; gap: 6px; }
+  .insp-title { font-weight: 700; font-size: 12px; color: var(--accent); }
+  .insp-sub { font-size: 10px; color: var(--text-dim); }
+  .ctl-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .ctl-label { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); width: 48px; flex: none; }
+  .vbtn {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: 10px;
+    transition: filter .1s, transform .1s;
+  }
+  .vbtn:hover { filter: brightness(1.35); transform: translateY(-1px); }
+  .vbtn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .vbtn:disabled { opacity: .3; cursor: default; transform: none; }
+  .vbtn.danger:hover { border-color: #ff8bb0; color: #ffc2d6; }
+  .insp-beats { font-size: 11px; color: var(--text); min-width: 66px; text-align: center; }
+
+  .tools { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .fieldlab { display: flex; align-items: center; gap: 5px; color: var(--text-dim); font-size: 11px; }
+  .fieldlab input[type=range] { width: 70px; accent-color: var(--accent); }
+
+  /* ── Ideas panel ────────────────────────────────────── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 6px; align-items: center; }
+  .tabs button {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--text-dim);
+    border-radius: 999px; padding: 4px 11px; cursor: pointer; font-size: 11px;
+  }
+  .tabs button:hover { color: var(--text); }
+  .tabs button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .dice-btn {
+    background: linear-gradient(135deg, rgba(255,139,214,0.20), rgba(168,92,255,0.20));
+    border: 1px solid rgba(255,139,214,0.4); color: var(--text);
+    border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 11px;
+    transition: box-shadow .12s, transform .12s;
+  }
+  .dice-btn:hover { box-shadow: 0 0 12px rgba(255,139,214,0.35); transform: translateY(-1px); }
+  .tip { color: var(--text-dim); font-size: 10px; margin: 0 0 7px; min-height: 13px; font-style: italic; }
+  #tabBody { flex: 1; min-height: 0; overflow-y: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    position: relative;
+    background: linear-gradient(155deg, hsla(var(--h),55%,55%,0.20), hsla(var(--h),55%,40%,0.06));
+    border: 1px solid hsla(var(--h),55%,62%,0.40); border-radius: 9px;
+    padding: 6px 10px; cursor: pointer;
+    transition: transform .1s, box-shadow .1s, border-color .1s;
+  }
+  .chip:hover {
+    transform: translateY(-2px);
+    border-color: hsla(var(--h),80%,72%,0.85);
+    box-shadow: 0 4px 14px hsla(var(--h),70%,55%,0.25);
+  }
+  .chip:active { transform: translateY(0) scale(0.97); }
+  .chip b { font-weight: 700; font-size: 12px; color: hsl(var(--h),80%,86%); }
+  .chip small { color: var(--text-dim); margin-left: 5px; font-size: 9px; }
+  .chip.sug { border-color: var(--star); box-shadow: 0 0 10px rgba(255,227,168,0.16); }
+  .chip.sug::after { content: "★"; position: absolute; top: 1px; right: 4px; font-size: 8px; color: var(--star); }
+  .chip.armed { border-color: hsla(var(--h),85%,75%,0.95); box-shadow: 0 0 12px hsla(var(--h),75%,60%,0.35); }
+  .chip .chip-add {
+    display: inline-block; margin-left: 7px; padding: 0 5px;
+    border: 1px solid hsla(var(--h),55%,62%,0.45); border-radius: 6px;
+    color: var(--text-dim); font-size: 11px; font-weight: 700; line-height: 14px;
+  }
+  .chip .chip-add:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .pal-label { font-size: 9px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-dim); margin: 0 0 5px; }
+  .pal-gap { height: 9px; }
+
+  /* ── Footer ─────────────────────────────────────────── */
+  .footer { display: flex; gap: 9px; align-items: center; }
+  .spacer { margin-left: auto; }
+  .tempo-tag { color: var(--text-dim); font-size: 11px; }
+  button.action {
+    border: 1px solid var(--border); border-radius: 999px; padding: 7px 16px;
+    cursor: pointer; font-size: 12px; font-weight: 600;
+    transition: box-shadow .12s, filter .12s;
+  }
+  .btn-play {
+    background: rgba(127,216,255,0.12); color: var(--play);
+    border-color: rgba(127,216,255,0.38); min-width: 108px;
+  }
+  .btn-play:hover { box-shadow: 0 0 14px rgba(127,216,255,0.30); }
+  .btn-play.playing { background: var(--play); color: var(--play-ink); border-color: var(--play); box-shadow: 0 0 16px rgba(127,216,255,0.45); }
+  .btn-section {
+    background: transparent; color: var(--play);
+    border-color: rgba(127,216,255,0.25); font-weight: 500;
+  }
+  .btn-section:hover { box-shadow: 0 0 10px rgba(127,216,255,0.22); }
+  .btn-write {
+    background: linear-gradient(135deg, #c9a6ff, #ff8bd6); color: var(--accent-ink);
+    border-color: transparent; box-shadow: 0 0 14px var(--glow);
+  }
+  .btn-write:hover { filter: brightness(1.08); box-shadow: 0 0 20px var(--glow); }
+  .btn-write:disabled { opacity: .35; cursor: default; box-shadow: none; }
+  .btn-ghost { background: transparent; color: var(--text-dim); border-color: transparent; }
+  .btn-ghost:hover { color: var(--text); }
+  .apply-group { display: flex; align-items: center; gap: 6px; }
+  .status { color: var(--accent); font-size: 11px; font-style: italic; }
+  .kbd-hints { color: var(--text-dim); font-size: 10px; opacity: .7; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">✦ Chord Reharmonizer</div>
+    <span class="clip-badge" id="clipBadge"></span>
+    <span class="live-badge hidden" id="liveBadge"></span>
+    <span class="spacer-h"></span>
+    <div class="field"><label>Key</label><select id="keyRoot"></select><select id="keyMode"></select></div>
+    <div class="field"><label>Sound</label>
+      <select id="soundSel">
+        <option value="piano">Piano</option>
+        <option value="ep">Electric Piano</option>
+        <option value="synth">Synth</option>
+        <option value="none">Muted</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Your progression</h2>
+      <span class="hint">tap a chord — or drag across the strip — to choose the moment to reimagine</span>
+      <span class="spacer-h"></span>
+      <span class="sel-info" id="selInfo"></span>
+      <button class="mini-btn hidden" id="selClearBtn" title="Clear the selection">✕ clear</button>
+    </div>
+    <div id="timeArea">
+      <div id="ruler"></div>
+      <div id="track"></div>
+      <div id="selOverlay">
+        <div class="body" title="Drag to slide the selection"></div>
+        <div id="ghostRow"></div>
+        <div class="handle left" title="Drag to adjust where the rewrite starts"></div>
+        <div class="handle right" title="Drag to adjust where the rewrite ends"></div>
+      </div>
+      <div id="playline"></div>
+    </div>
+  </div>
+
+  <div id="mid">
+    <div class="panel col">
+      <div class="panel-head">
+        <h2>The rewrite</h2>
+        <span class="hint" id="regSpan"></span>
+      </div>
+      <div id="cards"></div>
+      <div class="inspector hidden" id="inspector">
+        <div class="insp-head">
+          <span class="insp-title" id="inspTitle"></span>
+          <span class="insp-sub">— click another card to edit it instead</span>
+        </div>
+        <div class="ctl-row" id="colorRow"></div>
+        <div class="ctl-row" id="voiceRow"></div>
+        <div class="ctl-row">
+          <span class="ctl-label">Length</span>
+          <button class="vbtn" id="lenHalf" title="Make this chord half as long">½× shorter</button>
+          <span class="insp-beats" id="inspBeats"></span>
+          <button class="vbtn" id="lenDouble" title="Make this chord twice as long">2× longer</button>
+        </div>
+        <div class="ctl-row">
+          <span class="ctl-label">Order</span>
+          <button class="vbtn" id="mvL" title="Play this chord earlier in the section">← earlier</button>
+          <button class="vbtn" id="mvR" title="Play this chord later in the section">later →</button>
+          <span class="spacer"></span>
+          <button class="vbtn" id="dupBtn" title="Repeat this chord">⧉ duplicate</button>
+          <button class="vbtn danger" id="delBtn" title="Remove this chord from the section">✕ remove</button>
+        </div>
+      </div>
+      <div class="tools">
+        <button class="mini-btn" id="reseedBtn" title="Bring back the chords from your original clip">↺ original chords</button>
+        <button class="mini-btn" id="clearBtn" title="Empty the section — applying will leave silence here">clear all</button>
+        <span class="spacer"></span>
+        <label class="fieldlab" title="How hard the new chords hit">Vel <input type="range" id="vel" min="20" max="127" value="96"><span id="velNum">96</span></label>
+        <label class="toggle" title="A touch of human timing and velocity drift"><input type="checkbox" id="humanize" checked /> Humanize</label>
+        <label class="toggle" title="Re-voice the new chords so they flow smoothly out of what comes before"><input type="checkbox" id="smooth" /> Smooth voices</label>
+      </div>
+    </div>
+
+    <div class="panel col">
+      <div class="tabs">
+        <button data-tab="turn" class="on">Turnarounds</button>
+        <button data-tab="approach">Approach</button>
+        <button data-tab="pass">Passing</button>
+        <button data-tab="palette">All chords</button>
+        <span class="spacer-h"></span>
+        <button class="dice-btn" id="diceBtn" title="Fill the section with a random idea — keep rolling until something hits">🎲 Reimagine</button>
+      </div>
+      <p class="tip" id="tabTip"></p>
+      <div id="tabBody"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="action btn-play" id="playBtn">▶ Listen</button>
+    <label class="toggle" title="Keep cycling the whole progression while you tweak"><input type="checkbox" id="loopToggle" checked /> Loop</label>
+    <button class="action btn-section" id="playSecBtn" title="Hear just the rewritten section and its resolution">▶ Section</button>
+    <span class="tempo-tag" id="tempoTag"></span>
+    <span class="status" id="status"></span>
+    <span class="spacer"></span>
+    <span class="kbd-hints">1–7 add chords · Space listen · ⌫ remove · ⏎ apply</span>
+    <button class="action btn-ghost" id="cancelBtn">Cancel</button>
+    <div class="apply-group">
+      <select id="applyTarget" title="Where the rewrite lands">
+        <option value="replace">into this clip</option>
+        <option value="new">as a new clip</option>
+      </select>
+      <button class="action btn-write" id="applyBtn">✦ Drop it in</button>
+    </div>
+  </div>
+
+<script>
+"use strict";
+const ALL_DATA = /*__DATA__*/null;
+const { roots: ROOTS, modes: MODES, palette: PALETTE, live: LIVE, clip: CLIP } = ALL_DATA;
+
+const EPS = 1e-6;
+const BEATS_PER_BAR = 4;            // SDK does not expose time signature; assume 4/4
+const NOTE_FLAT = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
+const PC = { C:0,"C#":1,Db:1,"D♭":1,D:2,"D#":3,Eb:3,"E♭":3,E:4,F:5,"F#":6,Gb:6,"G♭":6,G:7,"G#":8,Ab:8,"A♭":8,A:9,"A#":10,Bb:10,"B♭":10,B:11 };
+function pcOf(name){ return PC[(name||"").replace(/[0-9]/g,"")] ?? 0; }
+function asc(a){ return a.slice().sort((x,y)=>x-y); }
+function avg(a){ return a.reduce((x,y)=>x+y,0)/a.length; }
+function fmt(x){ return (+x.toFixed(2)).toString(); }
+
+// Chord type → semitone intervals (used for voicing + detection in the webview).
+const CHORD_INTERVALS = {
+  maj7:[0,4,7,11], m7:[0,3,7,10], "7":[0,4,7,10], m7b5:[0,3,6,10], dim7:[0,3,6,9],
+  mMaj7:[0,3,7,11], "maj7#5":[0,4,8,11], maj:[0,4,7], m:[0,3,7], dim:[0,3,6],
+  aug:[0,4,8], "6":[0,4,7,9], m6:[0,3,7,9]
+};
+const TYPE_SUFFIX = {
+  maj7:"maj7", m7:"m7", "7":"7", m7b5:"m7♭5", dim7:"°7", mMaj7:"mMaj7",
+  "maj7#5":"maj7♯5", maj:"", m:"m", dim:"°", aug:"+", "6":"6", m6:"m6"
+};
+const DEG_ROMAN = ["I","♭II","II","♭III","III","IV","♯IV","V","♭VI","VI","♭VII","VII"];
+
+// Circle-of-fifths color wheel: harmonically close chords get chromatically
+// close hues, so the timeline reads like a constellation of related colors.
+const CO5 = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
+function hueOf(rootPc){ return CO5.indexOf(((rootPc % 12) + 12) % 12) * 30; }
+
+function nameOf(rootPc, type){ return NOTE_FLAT[((rootPc%12)+12)%12] + (TYPE_SUFFIX[type] ?? type); }
+
+/** Close voicing matching the extension's algorithm: anchor root into [54..65], stack up. */
+function voicing(rootPc, type){
+  const ivs = CHORD_INTERVALS[type] || [0,4,7];
+  const pcs = ivs.map(i => ((rootPc + i) % 12 + 12) % 12);
+  const folded = ((pcs[0] + 6) % 12) - 6;
+  let prev = 60 + folded;
+  const midi = [prev];
+  for (let i = 1; i < pcs.length; i++){
+    let step = (pcs[i] - (prev % 12) + 12) % 12;
+    if (step === 0) step = 12;
+    prev += step; midi.push(prev);
+  }
+  return midi;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CHORD COLOR LAYER — ported from Chord Progression Builder
+//  Each chord type exposes a list of "colors": full interval sets in semitones
+//  from the chord root, plus a display suffix appended to the card's root name.
+//  Computed from the close voicing's anchored root, so colors stay deterministic
+//  and in the same register as the base palette. Types CPB doesn't have
+//  (6 / m6 / dim / aug — the reharmonizer can DETECT these) get their own sets.
+// ════════════════════════════════════════════════════════════════════════════
+const CHORD_COLORS = {
+  'maj7': [
+    { key:'triad', label:'Triad', suf:'',         iv:[0,4,7] },
+    { key:'7th',   label:'7th',   suf:'maj7',     iv:[0,4,7,11] },
+    { key:'9th',   label:'9th',   suf:'maj9',     iv:[0,4,7,11,14] },
+    { key:'13th',  label:'13th',  suf:'maj13',    iv:[0,4,7,11,14,21] },
+    { key:'6',     label:'6',     suf:'6',        iv:[0,4,7,9] },
+    { key:'69',    label:'6/9',   suf:'6/9',      iv:[0,4,7,9,14] },
+    { key:'s11',   label:'♯11',   suf:'maj7♯11',  iv:[0,4,7,11,18] },
+    { key:'sus2',  label:'sus2',  suf:'sus2',     iv:[0,2,7] },
+  ],
+  '7': [
+    { key:'triad', label:'Triad', suf:'',      iv:[0,4,7] },
+    { key:'7th',   label:'7th',   suf:'7',     iv:[0,4,7,10] },
+    { key:'9th',   label:'9th',   suf:'9',     iv:[0,4,7,10,14] },
+    { key:'13th',  label:'13th',  suf:'13',    iv:[0,4,10,14,21] },
+    { key:'sus4',  label:'sus4',  suf:'7sus4', iv:[0,5,7,10] },
+    { key:'b9',    label:'♭9',    suf:'7♭9',   iv:[0,4,7,10,13] },
+    { key:'#9',    label:'♯9',    suf:'7♯9',   iv:[0,4,7,10,15] },
+  ],
+  'm7': [
+    { key:'triad', label:'Triad', suf:'m',   iv:[0,3,7] },
+    { key:'7th',   label:'7th',   suf:'m7',  iv:[0,3,7,10] },
+    { key:'9th',   label:'9th',   suf:'m9',  iv:[0,3,7,10,14] },
+    { key:'11th',  label:'11th',  suf:'m11', iv:[0,3,7,10,14,17] },
+    { key:'13th',  label:'13th',  suf:'m13', iv:[0,3,7,10,14,21] },
+    { key:'6',     label:'6',     suf:'m6',  iv:[0,3,7,9] },
+  ],
+  'm7b5': [
+    { key:'triad', label:'Triad', suf:'°',    iv:[0,3,6] },
+    { key:'7th',   label:'7th',   suf:'m7♭5', iv:[0,3,6,10] },
+    { key:'11th',  label:'11th',  suf:'ø11',  iv:[0,3,6,10,17] },
+  ],
+  'dim7': [
+    { key:'triad', label:'Triad', suf:'°',  iv:[0,3,6] },
+    { key:'7th',   label:'7th',   suf:'°7', iv:[0,3,6,9] },
+  ],
+  'mMaj7': [
+    { key:'triad', label:'Triad', suf:'m',     iv:[0,3,7] },
+    { key:'7th',   label:'7th',   suf:'mMaj7', iv:[0,3,7,11] },
+    { key:'9th',   label:'9th',   suf:'mMaj9', iv:[0,3,7,11,14] },
+  ],
+  'maj7#5': [
+    { key:'triad', label:'Triad', suf:'+',      iv:[0,4,8] },
+    { key:'7th',   label:'7th',   suf:'maj7♯5', iv:[0,4,8,11] },
+  ],
+  'maj': [
+    { key:'triad', label:'Triad', suf:'',     iv:[0,4,7] },
+    { key:'add9',  label:'add9',  suf:'add9', iv:[0,4,7,14] },
+    { key:'6',     label:'6',     suf:'6',    iv:[0,4,7,9] },
+    { key:'sus2',  label:'sus2',  suf:'sus2', iv:[0,2,7] },
+    { key:'sus4',  label:'sus4',  suf:'sus4', iv:[0,5,7] },
+  ],
+  'm': [
+    { key:'triad', label:'Triad', suf:'m',       iv:[0,3,7] },
+    { key:'add9',  label:'add9',  suf:'m(add9)', iv:[0,3,7,14] },
+    { key:'6',     label:'6',     suf:'m6',      iv:[0,3,7,9] },
+  ],
+  '6': [
+    { key:'triad', label:'Triad', suf:'',     iv:[0,4,7] },
+    { key:'6',     label:'6',     suf:'6',    iv:[0,4,7,9] },
+    { key:'69',    label:'6/9',   suf:'6/9',  iv:[0,4,7,9,14] },
+    { key:'7th',   label:'maj7',  suf:'maj7', iv:[0,4,7,11] },
+  ],
+  'm6': [
+    { key:'triad', label:'Triad', suf:'m',    iv:[0,3,7] },
+    { key:'6',     label:'6',     suf:'m6',   iv:[0,3,7,9] },
+    { key:'69',    label:'6/9',   suf:'m6/9', iv:[0,3,7,9,14] },
+  ],
+  'dim': [
+    { key:'triad', label:'Triad', suf:'°',    iv:[0,3,6] },
+    { key:'7th',   label:'°7',    suf:'°7',   iv:[0,3,6,9] },
+    { key:'m7b5',  label:'ø7',    suf:'m7♭5', iv:[0,3,6,10] },
+  ],
+  'aug': [
+    { key:'triad', label:'Triad',  suf:'+',      iv:[0,4,8] },
+    { key:'7th',   label:'maj7♯5', suf:'maj7♯5', iv:[0,4,8,11] },
+    { key:'7s5',   label:'7♯5',    suf:'7♯5',    iv:[0,4,8,10] },
+  ],
+};
+
+function colorDefs(type){
+  return CHORD_COLORS[type] || [{ key:'triad', label:'Triad', suf:null, iv:null }];
+}
+// The default color is the one whose interval set IS the chord's base type, so
+// a freshly seeded card sounds exactly like the chord it represents.
+function defaultColorKey(type){
+  const base = CHORD_INTERVALS[type] || [0,4,7];
+  const defs = colorDefs(type);
+  const hit = defs.find(d => d.iv && d.iv.length === base.length && d.iv.every((v,i) => v === base[i]));
+  return (hit || defs[0]).key;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  VOICING TRANSFORMS — ported from Chord Progression Builder
+//  Each transform is a deterministic function of a card's colored Close (root
+//  position) note set. Always recomputed from that canonical array, so
+//  transforms never compound.
+// ════════════════════════════════════════════════════════════════════════════
+// Bottom `k` notes raised an octave (k=1 → 1st inversion, k=2 → 2nd inversion).
+function invert(close, k){
+  const s = asc(close);
+  for (let i = 0; i < k && i < s.length; i++) s[i] += 12;
+  return asc(s);
+}
+
+function applyVoicing(notes, rootMidi, vKey){
+  const s = asc(notes);
+  const ivOf = n => ((n - rootMidi) % 12 + 12) % 12;
+  switch (vKey){
+    case 'inv1': return invert(s, 1);
+    case 'inv2': return invert(s, 2);
+    case 'open': { // drop-2: 2nd-from-top voice down an octave
+      if (s.length < 3) return s;
+      const o = s.slice(); o[o.length - 2] -= 12; return asc(o);
+    }
+    case 'drop3': { // 3rd-from-top voice down an octave
+      if (s.length < 4) return s;
+      const o = s.slice(); o[o.length - 3] -= 12; return asc(o);
+    }
+    case 'wide': { // root dropped an octave — instant pad spread
+      const o = s.slice(); o[0] -= 12; return asc(o);
+    }
+    case 'rootless': { // drop every voice in the root's pitch class
+      const out = s.filter(n => ivOf(n) !== 0);
+      return out.length >= 2 ? out : s;
+    }
+    case 'shell': { // root + 3rd (or sus tone) + 7th
+      const third = s.find(n => [2, 3, 4, 5].indexOf(ivOf(n)) >= 0 && ivOf(n) !== 0);
+      const seventh = s.find(n => ivOf(n) === 10 || ivOf(n) === 11);
+      if (third === undefined || seventh === undefined) return s;
+      return asc([rootMidi, third, seventh]);
+    }
+    case 'close':
+    default: return s;
+  }
+}
+
+const VOICING_DEFS = [
+  { key: 'close',    label: 'Close' },
+  { key: 'inv1',     label: '1st inv' },
+  { key: 'inv2',     label: '2nd inv' },
+  { key: 'open',     label: 'Open' },
+  { key: 'drop3',    label: 'Drop-3', min4: true },
+  { key: 'wide',     label: 'Wide' },
+  { key: 'rootless', label: 'Rootless', needs7: true },
+  { key: 'shell',    label: 'Shell',    needs7: true },
+];
+
+// Recompute a card's notes + display name from rootPc/type/color/voicing.
+// The default color keeps the card's original name (e.g. "C°7" from detection),
+// any other color renames it CPB-style as rootName + suffix.
+function recomputeSlot(s){
+  const defs = colorDefs(s.type);
+  const def = defs.find(d => d.key === s.color) || defs.find(d => d.key === defaultColorKey(s.type)) || defs[0];
+  const base = voicing(s.rootPc, s.type);
+  const rootMidi = base[0];
+  const colored = def.iv ? def.iv.map(x => rootMidi + x) : base.slice();
+  s.noteCount = colored.length;
+  s.hasSeventh = (def.iv || CHORD_INTERVALS[s.type] || []).some(x => x % 12 === 10 || x % 12 === 11);
+  s.midi = applyVoicing(asc(colored), rootMidi, s.voicing);
+  s.name = (def.suf == null || def.key === defaultColorKey(s.type)) ? s.baseName : s.rootName + def.suf;
+}
+
+/**
+ * Best-effort chord identification from a pitch-class set. `bassPc` (the lowest
+ * sounding note's pitch class, when known) strongly biases the root: CPB voices
+ * every chord in root position, so the bass is almost always the true root —
+ * this is what tells Am7 {A C E G} apart from its identical-pc-set twin C6.
+ */
+function detectChord(pcs, bassPc){
+  if (!pcs || !pcs.length) return null;
+  const present = new Set(pcs);
+  const types = ["maj7","m7","7","m7b5","dim7","mMaj7","maj7#5","6","m6","maj","m","dim","aug"];
+  let best = null;
+  for (let root = 0; root < 12; root++){
+    for (const t of types){
+      const ivs = CHORD_INTERVALS[t];
+      const chordPcs = ivs.map(i => (root + i) % 12);
+      let missing = 0; for (const cp of chordPcs) if (!present.has(cp)) missing++;
+      let extra = 0; for (const p of present) if (!chordPcs.includes(p)) extra++;
+      const rootPenalty = present.has(root) ? 0 : 2.5;
+      const bassBonus = (bassPc != null && root === bassPc) ? 1.2 : 0;
+      const score = missing * 1.6 + extra * 1.3 + rootPenalty - ivs.length * 0.12 - bassBonus;
+      if (best === null || score < best.score) best = { rootPc: root, type: t, score };
+    }
+  }
+  return best ? { rootPc: best.rootPc, type: best.type } : null;
+}
+
+// ── Key state ────────────────────────────────────────────────────────────────
+let keyRootName = ROOTS[LIVE.rootIndex] || "C";
+let keyMode = LIVE.mode || "Major";
+function keyRootPc(){ return pcOf(keyRootName); }
+function curPalette(){ return PALETTE[`${keyMode}|${keyRootName}`] || { diatonic: [], borrowed: [] }; }
+function romanFor(rootPc, type){
+  const d = ((rootPc - keyRootPc()) % 12 + 12) % 12;
+  return DEG_ROMAN[d] + (TYPE_SUFFIX[type] ?? "");
+}
+
+// ── Analyze the clip into chord blocks ───────────────────────────────────────
+const SLICE = 0.25;
+let blocks = [];
+function analyzeBlocks(){
+  const start = CLIP.loopStart, end = CLIP.loopEnd;
+  const notes = CLIP.notes.filter(n => n.startTime < end - EPS && n.startTime + n.duration > start + EPS);
+  const n = Math.max(1, Math.round((end - start) / SLICE));
+  const sets = [];
+  for (let i = 0; i < n; i++){
+    const t = start + (i + 0.5) * SLICE;
+    const pcs = new Set();
+    for (const nt of notes) if (nt.startTime <= t + EPS && nt.startTime + nt.duration > t - EPS) pcs.add(((nt.pitch % 12) + 12) % 12);
+    sets.push(pcs.size ? [...pcs].sort((a,b)=>a-b) : null);
+  }
+  const out = [];
+  let curPcs = null, curKey = null, curStart = 0;
+  const keyOf = a => a ? a.join(",") : null;
+  const push = (si, ei, pcs) => {
+    const bs = start + si * SLICE, be = start + ei * SLICE;
+    let minP = Infinity;
+    for (const nt of notes) if (nt.startTime < be - EPS && nt.startTime + nt.duration > bs + EPS) minP = Math.min(minP, nt.pitch);
+    const bass = minP === Infinity ? null : ((minP % 12) + 12) % 12;
+    out.push({ start: bs, end: be, pcs, det: detectChord(pcs, bass) });
+  };
+  for (let i = 0; i < n; i++){
+    const s = sets[i];
+    if (s === null) continue;                 // rest → sustain current block
+    const k = keyOf(s);
+    if (curPcs === null){ curPcs = s; curKey = k; curStart = i; }
+    else if (k !== curKey){ push(curStart, i, curPcs); curPcs = s; curKey = k; curStart = i; }
+  }
+  if (curPcs !== null) push(curStart, n, curPcs);
+  blocks = out;
+}
+
+// ── Selection state ──────────────────────────────────────────────────────────
+let selStart = null, selEnd = null;
+function span(){ return CLIP.loopEnd - CLIP.loopStart; }
+function pct(beat){ return ((beat - CLIP.loopStart) / span()) * 100; }
+function beatAtX(clientX, el){
+  const r = el.getBoundingClientRect();
+  const f = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+  return CLIP.loopStart + f * span();
+}
+function snap(beat){ return CLIP.loopStart + Math.round((beat - CLIP.loopStart) * 2) / 2; } // 1/2-beat grid
+
+// ── Rewrite cards ────────────────────────────────────────────────────────────
+let slots = [];
+let selectedCard = null;
+let VEL = 96, HUMANIZE = true, SMOOTH = false, LOOPPLAY = true;
+
+// Every card is born with the default color (= its own sound) and Close voicing;
+// recomputeSlot derives midi/name/hasSeventh from that state.
+function makeSlot(opts){
+  const s = {
+    rootPc: opts.rootPc, type: opts.type,
+    rootName: opts.rootName || NOTE_FLAT[((opts.rootPc % 12) + 12) % 12],
+    baseName: opts.name || nameOf(opts.rootPc, opts.type),
+    roman: opts.roman || romanFor(opts.rootPc, opts.type),
+    weight: opts.weight || 1,
+    origin: opts.origin || "tech",
+    color: defaultColorKey(opts.type),
+    voicing: "close",
+  };
+  recomputeSlot(s);
+  return s;
+}
+function slotFromBlock(b){
+  const d = b.det || { rootPc: 0, type: "maj" };
+  return makeSlot({ rootPc: d.rootPc, type: d.type, weight: Math.max(0.25, b.end - b.start), origin: "orig" });
+}
+function slotFromChord(rootPc, type, roman, weight){
+  return makeSlot({ rootPc, type, roman, weight });
+}
+function slotFromDiatonic(i, weight){
+  const c = curPalette().diatonic[i];
+  if (!c) return slotFromChord((keyRootPc() + [0,2,4,5,7,9,11][i]) % 12, "maj7", null, weight);
+  return makeSlot({ rootPc: pcOf(c.rootName), type: c.type, name: c.name, roman: c.roman,
+                    weight, rootName: c.rootName });
+}
+function seedSlots(){
+  if (selStart === null){ slots = []; return; }
+  const inside = blocks.filter(b => b.start >= selStart - EPS && b.end <= selEnd + EPS);
+  slots = inside.length ? inside.map(slotFromBlock)
+                        : [slotFromBlock({ start: selStart, end: selEnd, det: detectChord(pcsInSpan(selStart, selEnd), bassInSpan(selStart, selEnd)) })];
+  selectedCard = null;
+}
+function pcsInSpan(a, b){
+  const pcs = new Set();
+  for (const n of CLIP.notes) if (n.startTime < b - EPS && n.startTime + n.duration > a + EPS) pcs.add(((n.pitch % 12) + 12) % 12);
+  return [...pcs].sort((x,y)=>x-y);
+}
+function bassInSpan(a, b){
+  let minP = Infinity;
+  for (const n of CLIP.notes) if (n.startTime < b - EPS && n.startTime + n.duration > a + EPS) minP = Math.min(minP, n.pitch);
+  return minP === Infinity ? null : ((minP % 12) + 12) % 12;
+}
+
+// ── Target / preceding chord relative to the selection (loop-aware) ──────────
+function targetChord(){
+  if (!blocks.length || selEnd === null) return null;
+  const after = blocks.find(b => b.start >= selEnd - EPS);
+  return (after || blocks[0]).det;       // wrap to top of the loop
+}
+function prevChord(){
+  if (!blocks.length || selStart === null) return null;
+  const before = [...blocks].reverse().find(b => b.end <= selStart + EPS);
+  return (before || blocks[blocks.length - 1]).det;
+}
+function tgtName(){ const t = targetChord(); return t ? nameOf(t.rootPc, t.type) : null; }
+
+// ── Pitch context helpers ────────────────────────────────────────────────────
+function notesSoundingAt(t){
+  const p = [];
+  for (const n of CLIP.notes) if (n.startTime <= t + EPS && n.startTime + n.duration > t - EPS) p.push(n.pitch);
+  return asc(p);
+}
+// Average pitch of the original material in the region — new chords are
+// octave-shifted to live in the same register, so the rewrite sits IN the part
+// instead of jumping to middle C.
+function regionAnchor(){
+  let sum = 0, count = 0;
+  if (selStart !== null){
+    for (const n of CLIP.notes) if (n.startTime < selEnd - EPS && n.startTime + n.duration > selStart + EPS){ sum += n.pitch; count++; }
+  }
+  if (!count) for (const n of CLIP.notes){ sum += n.pitch; count++; }
+  return count ? sum / count : 60;
+}
+// Pitches sounding just before the selection (loop-aware) — seeds voice-leading.
+function seedVoicePitches(){
+  if (selStart === null) return null;
+  let t = selStart - 0.01;
+  if (t < CLIP.loopStart + EPS) t = CLIP.loopEnd - 0.01;
+  const p = notesSoundingAt(t);
+  return p.length >= 2 ? p : null;
+}
+
+// ── Auto voice-leading (optional) — ported from Chord Progression Builder ────
+function voiceLeadCost(candidate, prev){
+  let cost = 0;
+  for (const n of candidate){
+    let best = Infinity;
+    for (const p of prev) best = Math.min(best, Math.abs(n - p));
+    cost += best;
+  }
+  return cost;
+}
+function bestVoicingAgainst(prev, notes){
+  let best = asc(notes), bestCost = Infinity;
+  const base = asc(notes);
+  for (let rot = 0; rot < base.length; rot++){
+    const rotated = asc(base.map((v, i) => (i < rot ? v + 12 : v)));
+    for (const shift of [-24, -12, 0, 12]){
+      const cand = rotated.map(v => v + shift);
+      if (Math.min.apply(null, cand) < 28 || Math.max.apply(null, cand) > 100) continue;
+      const cost = voiceLeadCost(cand, prev) + 0.15 * Math.abs(avg(cand) - avg(prev));
+      if (cost < bestCost - 1e-9) { bestCost = cost; best = cand; }
+    }
+  }
+  return best;
+}
+
+// Final per-card note arrays: register-anchored, optionally voice-led.
+// Works on any slot array so uncommitted chips can be auditioned too.
+function anchoredNotesFor(list){
+  if (!list.length) return [];
+  const anchor = regionAnchor();
+  let arrs = list.map(s => asc(s.midi));
+  arrs = arrs.map(a => {
+    const shift = Math.round((anchor - avg(a)) / 12) * 12;
+    return a.map(n => Math.max(0, Math.min(127, n + shift)));
+  });
+  if (SMOOTH){
+    const out = [];
+    let prev = seedVoicePitches();
+    for (const a of arrs){
+      const v = prev ? bestVoicingAgainst(prev, a) : a;
+      out.push(v); prev = v;
+    }
+    arrs = out;
+  }
+  return arrs;
+}
+function anchoredSlotNotes(){ return anchoredNotesFor(slots); }
+
+// Beat spans of each card inside the selection (weights → proportional time).
+function slotSpans(){
+  if (selStart === null || !slots.length) return [];
+  const L = selEnd - selStart, W = slots.reduce((s,x)=>s+x.weight,0) || 1;
+  const out = []; let cum = 0;
+  slots.forEach((s, i) => {
+    const st = selStart + L * cum / W;
+    cum += s.weight;
+    out.push({ idx: i, start: st, end: selStart + L * cum / W });
+  });
+  return out;
+}
+
+// ── Rendering: region → notes (this exact list is what gets applied) ─────────
+function renderRegionNotes(){
+  if (selStart === null || !slots.length) return [];
+  const arrs = anchoredSlotNotes();
+  const spans = slotSpans();
+  const out = [];
+  spans.forEach((sp, i) => {
+    const dur = Math.max(0.05, sp.end - sp.start - 0.02);
+    for (const p of arrs[i]) out.push({ pitch: p, startTime: +sp.start.toFixed(5), duration: +dur.toFixed(5), velocity: VEL });
+  });
+  if (HUMANIZE){
+    for (const n of out){
+      n.velocity = Math.max(1, Math.min(127, Math.round(n.velocity + (Math.random() - 0.5) * 14)));
+      if (n.startTime > selStart + EPS) n.startTime = +(n.startTime + Math.random() * 0.02).toFixed(5);
+      n.duration = +Math.max(0.05, Math.min(n.duration, selEnd - n.startTime)).toFixed(5);
+    }
+  }
+  return out;
+}
+
+// Original notes inside the loop, sliced at the selection boundaries — the
+// SAME razor-edit the extension performs on apply. What you hear is what you get.
+function slicedOriginals(){
+  const out = [];
+  for (const n of CLIP.notes){
+    let s = n.startTime, e = n.startTime + n.duration;
+    if (e <= CLIP.loopStart + EPS || s >= CLIP.loopEnd - EPS) continue;
+    s = Math.max(s, CLIP.loopStart); e = Math.min(e, CLIP.loopEnd);
+    const keep = (a, b) => out.push({ pitch: n.pitch, startTime: a, duration: b - a, velocity: n.velocity });
+    if (selStart === null || e <= selStart + EPS || s >= selEnd - EPS){ keep(s, e); continue; }
+    if (s < selStart - EPS) keep(s, selStart);
+    if (e > selEnd + EPS) keep(selEnd, e);
+  }
+  return out;
+}
+
+// Full performance for the Listen loop: sliced originals + the rewrite.
+function buildPerformance(){
+  const base = CLIP.loopStart, len = span();
+  const events = [];
+  for (const n of slicedOriginals()) events.push({ pitch: n.pitch, startTime: n.startTime - base, duration: n.duration, velocity: n.velocity });
+  for (const n of renderRegionNotes()) events.push({ pitch: n.pitch, startTime: n.startTime - base, duration: n.duration, velocity: n.velocity });
+  for (const e of events) e.duration = Math.max(0.03, Math.min(e.duration, len - e.startTime));
+  return { events, lengthBeats: len };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  AUDIO ENGINE — same instruments as Chord Progression Builder
+// ════════════════════════════════════════════════════════════════════════════
+let audioCtx = null;
+function getAudioCtx(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function midiToFreq(midi){ return 440 * Math.pow(2, (midi - 69) / 12); }
+function instrument(){ return document.getElementById('soundSel').value; }
+
+function makeGate(ctx, dest, at, dur){
+  const gate = ctx.createGain();
+  gate.gain.setValueAtTime(1, at);
+  gate.gain.setValueAtTime(1, at + dur);
+  gate.gain.linearRampToValueAtTime(0, at + dur + 0.08);
+  gate.connect(dest);
+  return gate;
+}
+
+function playNote_piano(ctx, dest, freq, vel, at, dur){
+  const gate = makeGate(ctx, dest, at, dur);
+  const master = ctx.createGain();
+  master.connect(gate);
+  master.gain.setValueAtTime(vel, at);
+  master.gain.exponentialRampToValueAtTime(0.001, at + 2.5);
+  const amps = [1, 0.5, 0.25, 0.13, 0.07, 0.035, 0.018];
+  amps.forEach((amp, i) => {
+    const n = i + 1;
+    const f = freq * n * Math.sqrt(1 + 0.00015 * n * n);
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = f;
+    const decay = 2.5 / (n * 0.45 + 0.55);
+    g.gain.setValueAtTime(amp * 0.35, at);
+    g.gain.exponentialRampToValueAtTime(0.001, at + decay);
+    osc.connect(g); g.connect(master);
+    osc.start(at); osc.stop(at + Math.min(decay, dur + 0.15) + 0.1);
+  });
+}
+
+function playNote_ep(ctx, dest, freq, vel, at, dur){
+  const gate = makeGate(ctx, dest, at, dur);
+  const mod = ctx.createOscillator();
+  const modGain = ctx.createGain();
+  const car = ctx.createOscillator();
+  const gain = ctx.createGain();
+  mod.type = 'sine';
+  mod.frequency.value = freq * 2;
+  modGain.gain.setValueAtTime(freq * 2.8, at);
+  modGain.gain.exponentialRampToValueAtTime(0.5, at + 1.0);
+  mod.connect(modGain); modGain.connect(car.frequency);
+  car.type = 'sine'; car.frequency.value = freq;
+  car.connect(gain); gain.connect(gate);
+  gain.gain.setValueAtTime(vel * 0.5, at);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + 2.2);
+  mod.start(at); car.start(at);
+  mod.stop(at + dur + 0.2); car.stop(at + dur + 0.2);
+}
+
+function playNote_synth(ctx, dest, freq, vel, at, dur){
+  const gate = makeGate(ctx, dest, at, dur);
+  const osc1 = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const filter = ctx.createBiquadFilter();
+  const gain = ctx.createGain();
+  osc1.type = 'sawtooth'; osc1.frequency.value = freq;
+  osc2.type = 'sawtooth'; osc2.frequency.value = freq * 1.006;
+  filter.type = 'lowpass'; filter.Q.value = 3.5;
+  filter.frequency.setValueAtTime(freq * 1.2, at);
+  filter.frequency.exponentialRampToValueAtTime(freq * 7, at + 0.06);
+  filter.frequency.exponentialRampToValueAtTime(freq * 2, at + 1.5);
+  osc1.connect(filter); osc2.connect(filter);
+  filter.connect(gain); gain.connect(gate);
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(vel * 0.28, at + 0.018);
+  gain.gain.setValueAtTime(vel * 0.28, at + Math.min(0.25, dur));
+  gain.gain.exponentialRampToValueAtTime(0.001, at + Math.max(0.3, Math.min(1.8, dur + 0.2)));
+  osc1.start(at); osc2.start(at);
+  osc1.stop(at + dur + 0.25); osc2.stop(at + dur + 0.25);
+}
+
+function playOneNote(ctx, dest, inst, midi, gain, at, dur){
+  const freq = midiToFreq(midi);
+  if (inst === 'piano') playNote_piano(ctx, dest, freq, gain, at, dur);
+  else if (inst === 'ep') playNote_ep(ctx, dest, freq, gain, at, dur);
+  else if (inst === 'synth') playNote_synth(ctx, dest, freq, gain, at, dur);
+}
+
+// One-shot chord audition — used everywhere a chord is tapped.
+function previewChord(midiNotes){
+  const inst = instrument();
+  if (inst === 'none' || !midiNotes || !midiNotes.length) return;
+  const ctx = getAudioCtx();
+  const gain = 0.7 / Math.sqrt(midiNotes.length);
+  midiNotes.forEach(m => playOneNote(ctx, ctx.destination, inst, m, gain, ctx.currentTime, 1.1));
+}
+
+// ── Transport: full-loop playback + section audition ─────────────────────────
+let playback = null; // { gain, timers: [] }
+
+function clearPlaying(){
+  document.querySelectorAll('.playing').forEach(el => el.classList.remove('playing'));
+}
+function setPlaying(){
+  clearPlaying();
+  for (const id of arguments){
+    const el = document.getElementById(id);
+    if (el) el.classList.add('playing');
+  }
+}
+function startPlayline(fromBeat, toBeat, seconds){
+  const pl = document.getElementById('playline');
+  pl.style.display = 'block';
+  pl.style.transition = 'none';
+  pl.style.left = pct(fromBeat) + '%';
+  void pl.offsetWidth; // reflow so the next transition restarts
+  pl.style.transition = 'left ' + seconds + 's linear';
+  pl.style.left = pct(toBeat) + '%';
+}
+function hidePlayline(){
+  const pl = document.getElementById('playline');
+  pl.style.transition = 'none';
+  pl.style.display = 'none';
+}
+function stopPlayback(){
+  if (!playback) return;
+  for (const t of playback.timers) clearTimeout(t);
+  const ctx = getAudioCtx();
+  try {
+    playback.gain.gain.cancelScheduledValues(ctx.currentTime);
+    playback.gain.gain.setValueAtTime(playback.gain.gain.value, ctx.currentTime);
+    playback.gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.08);
+  } catch (e) {}
+  playback = null;
+  clearPlaying();
+  hidePlayline();
+  updatePlayBtn();
+}
+function updatePlayBtn(){
+  const btn = document.getElementById('playBtn');
+  btn.textContent = playback ? '■ Stop' : '▶ Listen';
+  btn.classList.toggle('playing', !!playback);
+}
+
+// One pass of the whole loop; re-arms itself while Loop is on, picking up any
+// edits made mid-flight — so you can keep sculpting while it cycles.
+function schedulePass(){
+  const perf = buildPerformance();
+  if (!perf.events.length){ stopPlayback(); setStatus('Nothing to play.'); return; }
+  const ctx = getAudioCtx();
+  const spb = 60 / (LIVE.tempo || 120);
+  const t0 = ctx.currentTime + 0.06;
+  const dens = Math.max(3, Math.min(6, Math.round(perf.events.length / Math.max(1, perf.lengthBeats))));
+  for (const ev of perf.events){
+    const g = (0.7 / Math.sqrt(dens)) * (ev.velocity / 110);
+    playOneNote(ctx, playback.gain, instrument(), ev.pitch, g, t0 + ev.startTime * spb, ev.duration * spb);
+  }
+  startPlayline(CLIP.loopStart, CLIP.loopEnd, perf.lengthBeats * spb);
+  // Light each chord as it sounds: original blocks outside the selection,
+  // rewrite cards (and their ghosts) inside it.
+  const cues = [];
+  blocks.forEach((b, i) => {
+    if (selStart !== null && b.start >= selStart - EPS && b.end <= selEnd + EPS) return;
+    cues.push({ t: b.start - CLIP.loopStart, ids: ['blk-' + i] });
+  });
+  slotSpans().forEach(sp => cues.push({ t: sp.start - CLIP.loopStart, ids: ['card-' + sp.idx, 'ghost-' + sp.idx] }));
+  cues.sort((a, b) => a.t - b.t);
+  for (const c of cues){
+    playback.timers.push(setTimeout(() => { if (playback) setPlaying.apply(null, c.ids); }, 60 + c.t * spb * 1000));
+  }
+  playback.timers.push(setTimeout(() => {
+    if (!playback) return;
+    if (LOOPPLAY) schedulePass();
+    else stopPlayback();
+  }, perf.lengthBeats * spb * 1000 + 80));
+}
+
+function playWhole(){
+  if (playback){ stopPlayback(); return; }
+  if (instrument() === 'none'){ setStatus('Preview is muted — pick a Sound up top.'); return; }
+  const ctx = getAudioCtx();
+  const g = ctx.createGain();
+  g.gain.value = 1;
+  g.connect(ctx.destination);
+  playback = { gain: g, timers: [] };
+  schedulePass();
+  updatePlayBtn();
+}
+
+// Just the rewrite + one beat of its resolution — the quickest reality check.
+function playSection(){
+  if (selStart === null){ setStatus('Select a section first — tap a chord up top.'); return; }
+  if (instrument() === 'none'){ setStatus('Preview is muted — pick a Sound up top.'); return; }
+  stopPlayback();
+  const ev = renderRegionNotes().map(n => ({ pitch: n.pitch, startTime: n.startTime - selStart, duration: n.duration, velocity: n.velocity }));
+  let len = selEnd - selStart;
+  const t = targetChord();
+  if (t){
+    const res = voicing(t.rootPc, t.type);
+    const shift = Math.round((regionAnchor() - avg(res)) / 12) * 12;
+    for (const p of res) ev.push({ pitch: p + shift, startTime: len, duration: 1.2, velocity: Math.max(30, VEL - 22) });
+    len += 1.2;
+  }
+  if (!ev.length){ setStatus('The section is empty — applying will clear these beats.'); return; }
+  const ctx = getAudioCtx();
+  const g = ctx.createGain();
+  g.gain.value = 1;
+  g.connect(ctx.destination);
+  playback = { gain: g, timers: [] };
+  const spb = 60 / (LIVE.tempo || 120);
+  const t0 = ctx.currentTime + 0.06;
+  for (const e of ev) playOneNote(ctx, g, instrument(), e.pitch, (0.7 / Math.sqrt(3)) * (e.velocity / 110), t0 + e.startTime * spb, e.duration * spb);
+  startPlayline(selStart, Math.min(CLIP.loopEnd, selStart + len), len * spb);
+  slotSpans().forEach(sp => playback.timers.push(setTimeout(() => {
+    if (playback) setPlaying('card-' + sp.idx, 'ghost-' + sp.idx);
+  }, 60 + (sp.start - selStart) * spb * 1000)));
+  playback.timers.push(setTimeout(() => { if (playback) stopPlayback(); }, len * spb * 1000 + 150));
+  updatePlayBtn();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  RENDERING
+// ════════════════════════════════════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+function setStatus(msg){ $("status").textContent = msg || ""; }
+
+function barBeat(t){
+  const rel = t - CLIP.loopStart;
+  const bar = Math.floor(rel / BEATS_PER_BAR) + 1;
+  const beat = rel - (bar - 1) * BEATS_PER_BAR + 1;
+  return "bar " + bar + (Math.abs(beat - 1) > EPS ? " · beat " + fmt(beat) : "");
+}
+
+function voiceStripHtml(midiNotes){
+  if (!midiNotes || !midiNotes.length) return "";
+  const lo = Math.min.apply(null, midiNotes), hi = Math.max.apply(null, midiNotes);
+  const range = Math.max(1, hi - lo);
+  return midiNotes.map(n => {
+    const h = 35 + 65 * ((n - lo) / range);
+    return '<span style="height:' + h + '%"></span>';
+  }).join('');
+}
+
+function renderTimeline(){
+  const ruler = $("ruler"); ruler.innerHTML = "";
+  const totalBeats = span();
+  for (let beat = 0; beat <= totalBeats + EPS; beat++){
+    const isBar = beat % BEATS_PER_BAR === 0;
+    const t = CLIP.loopStart + beat;
+    const d = document.createElement("div");
+    d.className = isBar ? "bar" : "beat";
+    d.style.left = pct(t) + "%";
+    if (isBar) d.textContent = (beat / BEATS_PER_BAR + 1);
+    ruler.appendChild(d);
+  }
+  const track = $("track");
+  [...track.querySelectorAll(".blk")].forEach(e => e.remove());
+  blocks.forEach((b, i) => {
+    const d = b.det || { rootPc: 0, type: "maj" };
+    const el = document.createElement("div");
+    el.className = "blk";
+    el.id = "blk-" + i;
+    el.style.left = pct(b.start) + "%";
+    el.style.width = (pct(b.end) - pct(b.start)) + "%";
+    el.style.setProperty("--h", hueOf(d.rootPc));
+    el.dataset.i = i;
+    el.innerHTML = `<span class="nm">${nameOf(d.rootPc, d.type)}</span><span class="rm">${romanFor(d.rootPc, d.type)}</span>`;
+    track.appendChild(el);
+  });
+  paintSelection();
+}
+
+function renderGhost(){
+  const row = $("ghostRow");
+  row.innerHTML = "";
+  if (selStart === null) return;
+  if (!slots.length){
+    const d = document.createElement("div");
+    d.className = "ghost-empty";
+    d.textContent = "silence";
+    row.appendChild(d);
+    return;
+  }
+  slots.forEach((s, i) => {
+    const d = document.createElement("div");
+    d.className = "ghost" + (s.origin === "orig" ? " orig-ghost" : "");
+    d.id = "ghost-" + i;
+    d.style.flexGrow = s.weight;
+    d.style.setProperty("--h", hueOf(s.rootPc));
+    d.textContent = s.name;
+    row.appendChild(d);
+  });
+}
+
+function paintSelection(){
+  const ov = $("selOverlay");
+  if (selStart === null){ ov.style.display = "none"; }
+  else {
+    ov.style.display = "block";
+    ov.style.left = pct(selStart) + "%";
+    ov.style.width = (pct(selEnd) - pct(selStart)) + "%";
+  }
+  $("selClearBtn").classList.toggle("hidden", selStart === null);
+  [...document.querySelectorAll(".blk")].forEach(el => {
+    const b = blocks[+el.dataset.i];
+    const inSel = selStart !== null && b.start >= selStart - EPS && b.end <= selEnd + EPS;
+    el.classList.toggle("muted", inSel);
+  });
+  $("selInfo").textContent = selStart === null ? "no selection"
+    : "rewriting " + fmt(selEnd - selStart) + " beats · from " + barBeat(selStart);
+  const t = tgtName();
+  $("regSpan").textContent = selStart === null ? "select a moment up top to begin"
+    : fmt(selEnd - selStart) + " beats" + (t ? " · resolves into " + t : "");
+  renderGhost();
+}
+
+function renderCards(){
+  confirmEmptyApply = false;   // any edit/selection change disarms the empty-apply confirm
+  const host = $("cards");
+  host.innerHTML = "";
+  if (selStart === null){
+    host.innerHTML = `<div class="cards-empty">Pick a moment in the strip above — then sketch its replacement here.</div>`;
+  } else if (!slots.length){
+    host.innerHTML = `<div class="cards-empty">Blank slate — add chords from the right, hit 🎲 Reimagine, or ↺ to start from the originals. Applying while empty clears these beats.</div>`;
+  } else {
+    const spans = slotSpans();
+    slots.forEach((s, i) => {
+      const el = document.createElement("div");
+      el.className = "card" + (s.origin === "orig" ? " orig-card" : "") + (i === selectedCard ? " selected" : "");
+      el.id = "card-" + i;
+      el.dataset.idx = i;
+      el.draggable = true;
+      el.style.setProperty("--h", hueOf(s.rootPc));
+      el.title = s.origin === "orig" ? "From your original clip — click to edit, drag to reorder"
+                                     : "Click to edit, drag to reorder";
+      el.innerHTML =
+        `<span class="x" data-rm="${i}" title="Remove this chord">✕</span>` +
+        `<div class="c-name">${s.name}</div>` +
+        `<div class="c-roman">${s.roman}</div>` +
+        `<div class="voice-strip">${voiceStripHtml(s.midi)}</div>` +
+        `<span class="beats-tag">${fmt(spans[i].end - spans[i].start)}b</span>`;
+      host.appendChild(el);
+    });
+  }
+  renderInspector();
+  updateApply();
+}
+
+function renderInspector(){
+  const insp = $("inspector");
+  if (selectedCard === null || !slots[selectedCard]){
+    selectedCard = null;
+    insp.classList.add("hidden");
+    return;
+  }
+  insp.classList.remove("hidden");
+  const s = slots[selectedCard];
+  $("inspTitle").textContent = s.name + "  ·  " + s.roman;
+  const spans = slotSpans();
+  $("inspBeats").textContent = fmt(spans[selectedCard].end - spans[selectedCard].start) + " beats";
+  // Color chips — extensions / sus / altered tensions for this chord type.
+  $("colorRow").innerHTML = '<span class="ctl-label">Color</span>' +
+    colorDefs(s.type).map(d =>
+      `<button class="vbtn${s.color === d.key ? ' active' : ''}" data-color="${d.key}" title="Recolor this chord">${d.label}</button>`
+    ).join('');
+  // Voicing chips — Rootless/Shell need a 7th, Drop-3 needs 4+ notes.
+  $("voiceRow").innerHTML = '<span class="ctl-label">Voicing</span>' +
+    VOICING_DEFS.map(v => {
+      const dis = (v.needs7 && !s.hasSeventh) || (v.min4 && s.noteCount < 4);
+      return `<button class="vbtn${s.voicing === v.key ? ' active' : ''}"${dis ? ' disabled' : ''} data-voicing="${v.key}" title="Re-voice this chord">${v.label}</button>`;
+    }).join('');
+}
+
+function setCardColor(key){
+  const s = slots[selectedCard];
+  if (!s) return;
+  s.color = key;
+  recomputeSlot(s);
+  // If the new color removed the 7th (or a voice), fall back from voicings
+  // that no longer apply, then recompute with the corrected voicing.
+  if ((!s.hasSeventh && (s.voicing === 'rootless' || s.voicing === 'shell')) ||
+      (s.noteCount < 4 && s.voicing === 'drop3')){
+    s.voicing = 'close';
+    recomputeSlot(s);
+  }
+  renderCards(); paintSelection();
+  previewCard(selectedCard);
+}
+
+function setCardVoicing(key){
+  const s = slots[selectedCard];
+  if (!s) return;
+  const def = VOICING_DEFS.find(v => v.key === key);
+  if (def && ((def.needs7 && !s.hasSeventh) || (def.min4 && s.noteCount < 4))) return;
+  s.voicing = key;
+  recomputeSlot(s);
+  renderCards(); paintSelection();
+  previewCard(selectedCard);
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+let activeTab = "turn";
+function tabTip(){
+  const t = tgtName();
+  if (selStart === null) return "Select a section first — everything here drops straight into it.";
+  switch (activeTab){
+    case "turn":     return "Classic cadences that pull back " + (t ? "to " + t : "home") + ". Click to hear one — double-click or + fills the section with it.";
+    case "approach": return "Slide in from a half-step away" + (t ? " — next chord is " + t : "") + ". Click to hear it; double-click or + tacks it onto the end.";
+    case "pass":     return "Bridge chords that connect what came before to what comes next" + (t ? " (" + t + ")" : "") + ". Click to hear, double-click or + to add.";
+    default:         return "The full palette in " + NOTE_FLAT[keyRootPc()] + " " + keyMode + ". ★ = pulls toward the next chord. Click to hear, double-click or + to add.";
+  }
+}
+
+// Chips audition on click and only commit on double-click or the + button —
+// so you can shop around by ear without cleaning up the rewrite afterwards.
+function chipRow(items){
+  const wrap = document.createElement("div"); wrap.className = "chips";
+  items.forEach(it => {
+    const c = document.createElement("div");
+    c.className = "chip" + (it.sug ? " sug" : "");
+    c.style.setProperty("--h", it.hue != null ? it.hue : 285);
+    c.innerHTML = `<b>${it.label}</b>${it.sub ? `<small>${it.sub}</small>` : ""}`;
+    c.title = (it.title ? it.title + ". " : "") + "Click to hear it — double-click or + to add it to the rewrite";
+    const add = document.createElement("span");
+    add.className = "chip-add";
+    add.textContent = "+";
+    add.title = "Add to the rewrite";
+    add.onclick = e => { e.stopPropagation(); commitChip(it, false); };
+    add.ondblclick = e => e.stopPropagation();
+    c.appendChild(add);
+    c.onclick = () => { armChip(c); previewSlots(it.make()); };
+    c.ondblclick = () => commitChip(it, true); // quiet — both clicks already played it
+    wrap.appendChild(c);
+  });
+  return wrap;
+}
+function armChip(c){
+  document.querySelectorAll("#tabBody .chip.armed").forEach(x => x.classList.remove("armed"));
+  c.classList.add("armed");
+}
+function commitChip(it, quiet){
+  const made = it.make();
+  if (it.mode === "replace") replaceAll(made);
+  else appendSlot(made[0], quiet);
+}
+
+// Turnarounds — diatonic-degree templates resolving to the top of the loop.
+const TURNS = [
+  { label: "ii – V",              sub: "the classic pull home",  deg: [1, 4] },
+  { label: "I – vi – ii – V",     sub: "doo-wop turnaround",     deg: [0, 5, 1, 4] },
+  { label: "iii – vi – ii – V",   sub: "longer runway",          deg: [2, 5, 1, 4] },
+  { label: "I – VI7 – ii – V7",   sub: "gospel heat",            build: () => [slotFromDiatonic(0), slotFromChord((keyRootPc()+9)%12,"7","V7/ii"), slotFromDiatonic(1), slotFromDiatonic(4)] },
+  { label: "ii – ♭II7",           sub: "tritone sub",            build: () => [slotFromDiatonic(1), slotFromChord((keyRootPc()+1)%12,"7","♭II7")] },
+  { label: "I – ♭iii°7 – ii – V", sub: "sneaky chromatic slide", build: () => [slotFromDiatonic(0), slotFromChord((keyRootPc()+3)%12,"dim7","♭iii°7"), slotFromDiatonic(1), slotFromDiatonic(4)] },
+];
+function renderTurn(body){
+  body.appendChild(chipRow(TURNS.map(t => ({
+    label: t.label, sub: t.sub, mode: "replace",
+    make: () => t.build ? t.build() : t.deg.map(d => slotFromDiatonic(d))
+  }))));
+}
+
+function renderApproach(body){
+  const t = targetChord();
+  if (!t){ body.innerHTML = `<div class="cards-empty">No following chord to approach.</div>`; return; }
+  const r = t.rootPc;
+  const items = [
+    { rootPc: (r+1)%12,  type: "7",    roman: "♭II7→",  sub: "tritone slide from above" },
+    { rootPc: (r+11)%12, type: "7",    roman: "♭VII7→", sub: "half-step push from below" },
+    { rootPc: (r+7)%12,  type: "7",    roman: "V7/x",   sub: "its own dominant" },
+    { rootPc: (r+11)%12, type: "dim7", roman: "vii°7→", sub: "leading-tone tension" },
+    { rootPc: (r+1)%12,  type: t.type, roman: "",       sub: "parallel ½-step above" },
+  ];
+  body.appendChild(chipRow(items.map(i => ({
+    label: nameOf(i.rootPc, i.type), sub: i.sub, hue: hueOf(i.rootPc), mode: "append",
+    make: () => [slotFromChord(i.rootPc, i.type, i.roman || undefined, 0.5)]
+  }))));
+}
+
+function renderPass(body){
+  const t = targetChord(), p = prevChord();
+  if (!t){ body.innerHTML = `<div class="cards-empty">No following chord to pass into.</div>`; return; }
+  const tr = t.rootPc, pr = p ? p.rootPc : (tr+10)%12;
+  const items = [
+    { rootPc: (pr+1)%12, type: "dim7", roman: "♯i°7",   sub: "chromatic passing °7" },
+    { rootPc: (tr+7)%12, type: "7",    roman: "V7/x",   sub: "dominant of the next chord" },
+    { rootPc: (tr+1)%12, type: "7",    roman: "♭II7",   sub: "tritone sub of the next" },
+    { rootPc: (tr+2)%12, type: "m7",   roman: "iim7/x", sub: "sets up a ii–V into it" },
+  ];
+  body.appendChild(chipRow(items.map(i => ({
+    label: nameOf(i.rootPc, i.type), sub: i.sub, hue: hueOf(i.rootPc), mode: "append",
+    make: () => [slotFromChord(i.rootPc, i.type, i.roman, 0.5)]
+  }))));
+}
+
+function renderPalette(body){
+  const pal = curPalette();
+  const t = targetChord();
+  const isSug = c => !!t && pcOf(c.rootName) === (t.rootPc + 7) % 12; // a fifth above next = V→next pull
+  const mk = c => ({
+    label: c.name, sub: c.roman, hue: hueOf(pcOf(c.rootName)), sug: isSug(c), mode: "append",
+    title: isSug(c) ? "Pulls toward " + tgtName() : "",
+    make: () => [makeSlot({ rootPc: pcOf(c.rootName), type: c.type, name: c.name, roman: c.roman, rootName: c.rootName })]
+  });
+  const h1 = document.createElement("div"); h1.className = "pal-label"; h1.textContent = "Diatonic — at home in the key";
+  body.appendChild(h1);
+  body.appendChild(chipRow(pal.diatonic.map(mk)));
+  const gap = document.createElement("div"); gap.className = "pal-gap"; body.appendChild(gap);
+  const h2 = document.createElement("div"); h2.className = "pal-label"; h2.textContent = "Borrowed — the spice rack";
+  body.appendChild(h2);
+  body.appendChild(chipRow(pal.borrowed.map(mk)));
+}
+
+function renderTab(){
+  $("tabTip").textContent = tabTip();
+  const body = $("tabBody"); body.innerHTML = "";
+  if (selStart === null){ body.innerHTML = `<div class="cards-empty">Waiting on a selection…</div>`; return; }
+  if (activeTab === "turn") renderTurn(body);
+  else if (activeTab === "approach") renderApproach(body);
+  else if (activeTab === "pass") renderPass(body);
+  else renderPalette(body);
+}
+
+function renderAll(){ renderTimeline(); renderCards(); renderTab(); }
+
+// ── Card / slot actions (every change makes a sound) ─────────────────────────
+function previewCard(i){
+  const arrs = anchoredSlotNotes();
+  if (arrs[i]) previewChord(arrs[i]);
+}
+// Audition candidate slots WITHOUT committing them to the rewrite.
+// One chord → one-shot strike; a sequence → played in time over the selection.
+function previewSlots(arr){
+  if (!arr || !arr.length) return;
+  if (instrument() === 'none'){ setStatus('Preview is muted — pick a Sound up top.'); return; }
+  const notes = anchoredNotesFor(arr);
+  if (arr.length === 1){ previewChord(notes[0]); return; }
+  stopPlayback();
+  const W = arr.reduce((s, x) => s + x.weight, 0) || 1;
+  const L = selStart !== null ? selEnd - selStart : W;
+  const ctx = getAudioCtx();
+  const g = ctx.createGain();
+  g.gain.value = 1;
+  g.connect(ctx.destination);
+  playback = { gain: g, timers: [] };
+  const spb = 60 / (LIVE.tempo || 120);
+  const t0 = ctx.currentTime + 0.06;
+  let cum = 0;
+  arr.forEach((s, i) => {
+    const st = L * cum / W;
+    cum += s.weight;
+    const dur = Math.max(0.05, L * cum / W - st - 0.02);
+    const gn = 0.7 / Math.sqrt(Math.max(3, notes[i].length));
+    for (const p of notes[i]) playOneNote(ctx, g, instrument(), p, gn, t0 + st * spb, dur * spb);
+  });
+  playback.timers.push(setTimeout(() => { if (playback) stopPlayback(); }, L * spb * 1000 + 600));
+  updatePlayBtn();
+}
+function appendSlot(s, quiet){
+  if (selStart === null) return;
+  slots.push(s);
+  selectedCard = slots.length - 1;
+  renderCards(); paintSelection();
+  if (!quiet) previewCard(slots.length - 1);
+}
+function replaceAll(arr){
+  if (selStart === null) return;
+  slots = arr;
+  selectedCard = null;
+  renderCards(); paintSelection();
+  playSection();
+}
+function removeCard(i){
+  slots.splice(i, 1);
+  if (selectedCard !== null){
+    if (selectedCard === i) selectedCard = null;
+    else if (selectedCard > i) selectedCard--;
+  }
+  renderCards(); paintSelection();
+}
+function moveCard(from, to){
+  if (to < 0 || to >= slots.length) return;
+  const [s] = slots.splice(from, 1);
+  slots.splice(to, 0, s);
+  selectedCard = to;
+  renderCards(); paintSelection();
+}
+function selectCard(i){
+  selectedCard = i;
+  renderCards();
+  previewCard(i);
+}
+
+// 🎲 Reimagine — a random tasteful idea for the selected span.
+function reimagine(){
+  if (selStart === null){ setStatus("Select a section first — tap a chord up top."); return; }
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const r = Math.random();
+  if (r < 0.55){
+    const t = pick(TURNS);
+    slots = t.build ? t.build() : t.deg.map(d => slotFromDiatonic(d));
+  } else {
+    seedSlots();
+    const t = targetChord();
+    if (t){
+      const opts = [
+        () => slots.push(slotFromChord((t.rootPc + 1) % 12, "7", "♭II7→", 0.5)),
+        () => slots.push(slotFromChord((t.rootPc + 7) % 12, "7", "V7/x", 0.5)),
+        () => slots.push(slotFromChord((t.rootPc + 11) % 12, "dim7", "vii°7→", 0.5)),
+      ];
+      pick(opts)();
+    }
+  }
+  selectedCard = null;
+  renderCards(); paintSelection();
+  setStatus("🎲 Reimagined — listen, tweak, or roll again.");
+  playSection();
+}
+
+// ── Selection interaction ────────────────────────────────────────────────────
+const timeArea = $("timeArea");
+function clampBeat(b){ return Math.min(CLIP.loopEnd, Math.max(CLIP.loopStart, b)); }
+
+// A NEW selection (fresh drag / chord click) starts the rewrite as a blank
+// slate — you're here to replace these chords, not keep them. Edge nudges and
+// moves keep whatever you've built; ↺ brings the originals back on demand.
+function finalizeSelection(fresh){
+  $("selOverlay").classList.remove("dragging");
+  if (selStart !== null && selEnd - selStart < 0.05){ selStart = selEnd = null; }
+  if (selStart === null || fresh){ slots = []; selectedCard = null; }
+  paintSelection(); renderCards(); renderTab();
+}
+
+// One pointer state-machine drives all selection. Blocks are pointer-events:none,
+// so a chord can never steal a drag — clicks are hit-tested by beat instead.
+let it = null;
+const pointerBeat = e => beatAtX(e.clientX, timeArea);
+
+timeArea.addEventListener("pointerdown", e => {
+  if (e.target.closest("#selOverlay")) return;       // handles/body run their own
+  const raw = pointerBeat(e);
+  it = { mode: "create", anchor: snap(raw), anchorRaw: raw, downX: e.clientX, shift: e.shiftKey, moved: false };
+  e.preventDefault();
+});
+function onHandleDown(e, mode){
+  e.stopPropagation(); e.preventDefault();
+  it = { mode, downX: e.clientX, moved: false, origStart: selStart, origEnd: selEnd, anchor: snap(pointerBeat(e)) };
+}
+$("selOverlay").querySelector(".handle.left").addEventListener("pointerdown", e => onHandleDown(e, "resizeL"));
+$("selOverlay").querySelector(".handle.right").addEventListener("pointerdown", e => onHandleDown(e, "resizeR"));
+$("selOverlay").querySelector(".body").addEventListener("pointerdown", e => onHandleDown(e, "move"));
+
+window.addEventListener("pointermove", e => {
+  if (!it) return;
+  if (Math.abs(e.clientX - it.downX) > 3) it.moved = true;
+  const b = snap(pointerBeat(e));
+  if (it.mode === "create"){
+    if (!it.moved) return;
+    $("selOverlay").classList.add("dragging");
+    selStart = clampBeat(Math.min(it.anchor, b));
+    selEnd = clampBeat(Math.max(it.anchor, b));
+  } else if (it.mode === "resizeL"){
+    selStart = clampBeat(Math.min(b, selEnd - 0.5));
+  } else if (it.mode === "resizeR"){
+    selEnd = clampBeat(Math.max(b, selStart + 0.5));
+  } else if (it.mode === "move"){
+    let d = b - it.anchor, ns = it.origStart + d, ne = it.origEnd + d;
+    if (ns < CLIP.loopStart){ ne += CLIP.loopStart - ns; ns = CLIP.loopStart; }
+    if (ne > CLIP.loopEnd){ ns -= ne - CLIP.loopEnd; ne = CLIP.loopEnd; }
+    selStart = ns; selEnd = ne;
+  }
+  paintSelection();
+});
+
+window.addEventListener("pointerup", () => {
+  if (!it) return;
+  const cur = it; it = null;
+  if (cur.mode === "create" && !cur.moved){
+    // a click, not a drag → select the chord under the cursor (shift extends)
+    const beat = cur.anchorRaw;
+    const blk = blocks.find(b => beat >= b.start - EPS && beat <= b.end + EPS);
+    if (blk){
+      if (cur.shift && selStart !== null){ selStart = Math.min(selStart, blk.start); selEnd = Math.max(selEnd, blk.end); }
+      else { selStart = blk.start; selEnd = blk.end; }
+      finalizeSelection(true);
+      // Audition the chord you just grabbed — its real notes, as recorded.
+      previewChord(notesSoundingAt(blk.start + 0.01));
+      setStatus("Got it — now reimagine it from the right, or 🎲.");
+    }
+    return;                                  // empty-space click: leave selection alone
+  }
+  finalizeSelection(cur.mode === "create");  // drag-create starts blank; resize/move keep your work
+});
+
+$("selClearBtn").onclick = () => { selStart = selEnd = null; finalizeSelection(false); };
+
+// ── Wiring ───────────────────────────────────────────────────────────────────
+function buildKeySelectors(){
+  const r = $("keyRoot"); r.innerHTML = "";
+  ROOTS.forEach((n, i) => { const o = document.createElement("option"); o.value = n; o.textContent = NOTE_FLAT[i]; r.appendChild(o); });
+  r.value = keyRootName;
+  const m = $("keyMode"); m.innerHTML = "";
+  MODES.forEach(md => { const o = document.createElement("option"); o.value = md; o.textContent = md; m.appendChild(o); });
+  m.value = keyMode;
+  // Changing key re-labels romans + palette but never throws away your cards.
+  r.onchange = () => { keyRootName = r.value; renderAll(); };
+  m.onchange = () => { keyMode = m.value; renderAll(); };
+}
+
+$("cards").addEventListener("click", e => {
+  const rm = e.target.closest("[data-rm]");
+  if (rm){ e.stopPropagation(); removeCard(+rm.dataset.rm); return; }
+  const card = e.target.closest(".card");
+  if (card) selectCard(+card.dataset.idx);
+});
+// Drag-to-reorder, same feel as Chord Progression Builder.
+let dragFrom = null;
+$("cards").addEventListener("dragstart", e => {
+  const el = e.target.closest(".card");
+  if (!el) return;
+  dragFrom = +el.dataset.idx;
+  e.dataTransfer.effectAllowed = "move";
+});
+$("cards").addEventListener("dragover", e => {
+  const el = e.target.closest(".card");
+  if (!el || dragFrom === null) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  el.classList.add("dragover");
+});
+$("cards").addEventListener("dragleave", e => {
+  const el = e.target.closest(".card");
+  if (el) el.classList.remove("dragover");
+});
+$("cards").addEventListener("drop", e => {
+  const el = e.target.closest(".card");
+  if (!el || dragFrom === null) return;
+  e.preventDefault();
+  moveCard(dragFrom, +el.dataset.idx);
+  dragFrom = null;
+});
+$("cards").addEventListener("dragend", () => { dragFrom = null; });
+
+// Inspector — plain-words editing of the selected card.
+// Color / voicing chips are re-rendered per card, so handle them by delegation.
+$("inspector").addEventListener("click", e => {
+  const btn = e.target.closest(".vbtn");
+  if (!btn || btn.disabled) return;
+  if (btn.dataset.color) setCardColor(btn.dataset.color);
+  else if (btn.dataset.voicing) setCardVoicing(btn.dataset.voicing);
+});
+$("lenHalf").onclick = () => { const s = slots[selectedCard]; if (!s) return; s.weight = Math.max(0.25, s.weight * 0.5); renderCards(); paintSelection(); };
+$("lenDouble").onclick = () => { const s = slots[selectedCard]; if (!s) return; s.weight = Math.min(8, s.weight * 2); renderCards(); paintSelection(); };
+$("mvL").onclick = () => { if (selectedCard !== null) moveCard(selectedCard, selectedCard - 1); };
+$("mvR").onclick = () => { if (selectedCard !== null) moveCard(selectedCard, selectedCard + 1); };
+$("dupBtn").onclick = () => {
+  const s = slots[selectedCard]; if (!s) return;
+  slots.splice(selectedCard + 1, 0, { ...s, midi: s.midi.slice() });
+  selectedCard++;
+  renderCards(); paintSelection();
+};
+$("delBtn").onclick = () => { if (selectedCard !== null) removeCard(selectedCard); };
+
+$("reseedBtn").onclick = () => { seedSlots(); renderCards(); paintSelection(); setStatus("Back to the original chords."); };
+$("clearBtn").onclick = () => { slots = []; selectedCard = null; renderCards(); paintSelection(); };
+$("vel").oninput = e => { VEL = +e.target.value; $("velNum").textContent = VEL; };
+$("humanize").onchange = e => { HUMANIZE = e.target.checked; };
+$("smooth").onchange = e => {
+  SMOOTH = e.target.checked;
+  setStatus(SMOOTH ? "Smooth voices on — new chords flow out of what comes before." : "");
+};
+$("loopToggle").onchange = e => { LOOPPLAY = e.target.checked; };
+
+document.querySelectorAll(".tabs button[data-tab]").forEach(b => b.onclick = () => {
+  activeTab = b.dataset.tab;
+  document.querySelectorAll(".tabs button[data-tab]").forEach(x => x.classList.toggle("on", x === b));
+  renderTab();
+});
+$("diceBtn").onclick = reimagine;
+
+$("playBtn").onclick = playWhole;
+$("playSecBtn").onclick = playSection;
+
+// ── Apply / cancel (WebView bridge, both platforms) ──────────────────────────
+function postToHost(data){
+  const msg = { method: "close_and_send", params: [JSON.stringify(data)] };
+  if (window.webkit?.messageHandlers?.live) window.webkit.messageHandlers.live.postMessage(msg);
+  else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
+}
+function updateApply(){ $("applyBtn").disabled = selStart === null; }
+// With the blank-slate default, an empty rewrite is one stray click away from
+// wiping the section — so an empty apply asks for a second click to confirm.
+let confirmEmptyApply = false;
+function apply(){
+  if (selStart === null) return;
+  if (!slots.length && !confirmEmptyApply){
+    confirmEmptyApply = true;
+    setStatus("The rewrite is empty — applying will clear this section. Click Apply again if that's what you want.");
+    return;
+  }
+  stopPlayback();
+  postToHost({
+    action: "apply",
+    target: $("applyTarget").value,
+    regionStart: +selStart.toFixed(5),
+    regionEnd: +selEnd.toFixed(5),
+    notes: renderRegionNotes(),
+  });
+}
+$("applyBtn").onclick = apply;
+$("cancelBtn").onclick = () => { stopPlayback(); postToHost({ action: "cancel" }); };
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape"){ stopPlayback(); postToHost({ action: "cancel" }); return; }
+  const tag = (e.target.tagName || "").toUpperCase();
+  if (tag === "SELECT" || tag === "INPUT" || tag === "TEXTAREA") return;
+  if (e.key >= "1" && e.key <= "7"){
+    if (selStart !== null){ appendSlot(slotFromDiatonic(+e.key - 1)); e.preventDefault(); }
+  } else if (e.key === " "){
+    playWhole(); e.preventDefault();
+  } else if (e.key === "Enter"){
+    if (!$("applyBtn").disabled) apply();
+  } else if (e.key === "Backspace" || e.key === "Delete"){
+    if (selectedCard !== null){ removeCard(selectedCard); e.preventDefault(); }
+  } else if (e.key === "ArrowLeft"){
+    if (selectedCard === null) return;
+    if (e.shiftKey) moveCard(selectedCard, selectedCard - 1);
+    else if (selectedCard > 0) selectCard(selectedCard - 1);
+    e.preventDefault();
+  } else if (e.key === "ArrowRight"){
+    if (selectedCard === null) return;
+    if (e.shiftKey) moveCard(selectedCard, selectedCard + 1);
+    else if (selectedCard < slots.length - 1) selectCard(selectedCard + 1);
+    e.preventDefault();
+  }
+});
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+buildKeySelectors();
+analyzeBlocks();
+$("clipBadge").textContent = "♪ " + (CLIP.name || "Clip") + " · " + fmt(span() / BEATS_PER_BAR) + " bars";
+if (LIVE.mode){
+  const badge = $("liveBadge");
+  badge.textContent = "✦ " + NOTE_FLAT[LIVE.rootIndex] + " " + LIVE.mode + " — from Live";
+  badge.classList.remove("hidden");
+}
+$("tempoTag").textContent = "@ " + Math.round(LIVE.tempo || 120) + " BPM";
+renderAll();
+setStatus("Tap a chord — or drag across the strip — and reimagine it.");
+</script>
+</body>
+</html>
