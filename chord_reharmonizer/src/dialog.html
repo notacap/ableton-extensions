@@ -368,7 +368,7 @@
   <div class="panel">
     <div class="panel-head">
       <h2>Your progression</h2>
-      <span class="hint">tap a chord — or drag across the strip — to choose the moment to reimagine</span>
+      <span class="hint">tap a chord — or drag across the strip — to choose the moment to reimagine · shift-click just listens</span>
       <span class="spacer-h"></span>
       <span class="sel-info" id="selInfo"></span>
       <button class="mini-btn hidden" id="selClearBtn" title="Clear the selection">✕ clear</button>
@@ -1621,6 +1621,28 @@ function finalizeSelection(fresh){
 let it = null;
 const pointerBeat = e => beatAtX(e.clientX, timeArea);
 
+// A block's notes are only guaranteed to sound at its first slice MIDPOINT —
+// that's where analyzeBlocks sampled them. Humanized onsets can start a hair
+// after blk.start, which made the first chord (nothing sustaining in from
+// earlier) audition as silence.
+function blockAuditionPitches(blk){ return notesSoundingAt(blk.start + SLICE * 0.5); }
+
+// Shift-click inside the target area auditions the staged rewrite chord under
+// the cursor — the same anchored / voice-led pitches the loop plays.
+let slotFlashTimer = null;
+function previewSlotAt(beat){
+  const sp = slotSpans().find(s => beat >= s.start - EPS && beat <= s.end + EPS);
+  if (!sp) return;
+  const arr = anchoredSlotNotes()[sp.idx];
+  if (!arr || !arr.length) return;
+  previewChord(arr);
+  if (!playback){
+    setPlaying("card-" + sp.idx, "ghost-" + sp.idx);
+    clearTimeout(slotFlashTimer);
+    slotFlashTimer = setTimeout(() => { if (!playback) clearPlaying(); }, 700);
+  }
+}
+
 timeArea.addEventListener("pointerdown", e => {
   if (e.target.closest("#selOverlay")) return;       // handles/body run their own
   const raw = pointerBeat(e);
@@ -1629,6 +1651,7 @@ timeArea.addEventListener("pointerdown", e => {
 });
 function onHandleDown(e, mode){
   e.stopPropagation(); e.preventDefault();
+  if (mode === "move" && e.shiftKey){ previewSlotAt(pointerBeat(e)); return; }
   it = { mode, downX: e.clientX, moved: false, origStart: selStart, origEnd: selEnd, anchor: snap(pointerBeat(e)) };
 }
 $("selOverlay").querySelector(".handle.left").addEventListener("pointerdown", e => onHandleDown(e, "resizeL"));
@@ -1661,15 +1684,20 @@ window.addEventListener("pointerup", () => {
   if (!it) return;
   const cur = it; it = null;
   if (cur.mode === "create" && !cur.moved){
-    // a click, not a drag → select the chord under the cursor (shift extends)
+    // a click, not a drag → select the chord under the cursor
     const beat = cur.anchorRaw;
     const blk = blocks.find(b => beat >= b.start - EPS && beat <= b.end + EPS);
     if (blk){
-      if (cur.shift && selStart !== null){ selStart = Math.min(selStart, blk.start); selEnd = Math.max(selEnd, blk.end); }
-      else { selStart = blk.start; selEnd = blk.end; }
+      if (cur.shift){
+        // shift-click = audition only — the selection is left exactly as it was,
+        // whether that's an existing target area or none at all
+        previewChord(blockAuditionPitches(blk));
+        return;
+      }
+      selStart = blk.start; selEnd = blk.end;
       finalizeSelection(true);
       // Audition the chord you just grabbed — its real notes, as recorded.
-      previewChord(notesSoundingAt(blk.start + 0.01));
+      previewChord(blockAuditionPitches(blk));
       setStatus("Got it — now reimagine it from the right, or 🎲.");
     }
     return;                                  // empty-space click: leave selection alone

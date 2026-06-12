@@ -19,9 +19,10 @@ progression from scratch, Chord Reharmonizer *transforms an existing one.*
   harmonically close chords get visually close colors.
 - **Opens in your key.** It snapshots your Live Set's root + scale on open, so every
   suggestion is already in key. Override the key/mode at any time without losing your edits.
-- **Select any section** — click a chord block (you hear its real notes), shift-click to
-  extend, or drag across the timeline. Edge handles and a draggable middle fine-tune the
-  span, with a live `rewriting N beats · from bar X` readout.
+- **Select any section** — click a chord block (you hear its real notes) or drag across
+  the timeline. Shift-click a block to just audition it without touching the selection.
+  Edge handles and a draggable middle fine-tune the span, with a live
+  `rewriting N beats · from bar X` readout.
 - **Context-aware reharmonization techniques** — each reads the chord that *follows* your
   selection and offers musically correct options:
   - **Turnarounds** — cadential templates that lead back to the next chord (`ii–V`,
@@ -80,8 +81,8 @@ progression from scratch, Chord Reharmonizer *transforms an existing one.*
 ## How to use
 
 1. Right-click a MIDI clip → **Reharmonize Section…**.
-2. **Select a section** of the progression — click a chord block, shift-click to extend,
-   or drag across the timeline.
+2. **Select a section** of the progression — click a chord block or drag across the
+   timeline (shift-click a block to audition it without changing the selection).
 3. Add a **turnaround / approach / passing** chord from the technique tabs, place chords
    by hand from the key palette, or hit **🎲 Reimagine**. Single-click a chip to hear it,
    click again (or **+**) to commit.
