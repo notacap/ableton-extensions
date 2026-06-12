@@ -326,6 +326,13 @@ function newSlot() {
            bars: 1, midiNotes: [], display: '', hasSeventh: false };
 }
 
+// Short scale labels for the MIDI clip name (e.g. "G Min: Gm7 – C9 …").
+const SCALE_SHORT = {
+  'Major': 'Maj', 'Minor': 'Min', 'Dorian': 'Dor', 'Mixolydian': 'Mixo',
+  'Lydian': 'Lyd', 'Phrygian': 'Phryg', 'Harmonic Minor': 'Harm Min',
+  'Melodic Minor': 'Mel Min',
+};
+
 // Adopt the Live Set's key when Scale Mode is on and the scale maps to a mode.
 if (ALL_DATA.live && ALL_DATA.live.scaleMode && ALL_DATA.live.mode) {
   state.root = ALL_DATA.roots[ALL_DATA.live.rootIndex] || 'C';
@@ -765,7 +772,9 @@ function buildPerformance() {
     ev.velocity = Math.max(1, Math.min(127, ev.velocity));
     ev.duration = Math.max(0.05, Math.min(ev.duration, t - ev.startTime)); // never spill past the loop
   }
-  return { events, lengthBeats: t, name: seq.map(s => s.name).join(' – ') };
+  const scale = SCALE_SHORT[state.mode] || state.mode;
+  const chords = seq.map(s => s.name).join(' – ');
+  return { events, lengthBeats: t, name: state.root + ' ' + scale + ': ' + chords };
 }
 
 // ════════════════════════════════════════════════════════════════════════
