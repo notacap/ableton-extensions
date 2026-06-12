@@ -1,154 +1,138 @@
 # Chord Reharmonizer
 
-> **Status: v2 — UX overhaul complete, not yet deployed.** Internal working notes, not a public-facing README.
+A context-menu extension for **Ableton Live 12** that reharmonizes the chord
+progressions you've already got — right in your clips, without hand-editing MIDI.
 
-An **Ableton Live 12 extension** built with the `@ableton-extensions/sdk` and a self-contained
-music-theory engine. It's a sibling to **Chord Progression Builder (CPB)**: where CPB *writes* a
-new looped progression from scratch, Chord Reharmonizer *transforms an existing one* — you
-right-click a MIDI clip, pick a section of the progression, and add a **turnaround**,
-**chromatic approach chord**, or **passing chords**, auditioning everything in place before
-dropping it in.
+Right-click a MIDI clip → **Reharmonize Section…**, and a dialog reads the clip
+into chord blocks on a timeline. Select a section, then add a **turnaround**,
+**chromatic approach chord**, or **passing chords** — or place any chord in the key
+by hand — auditioning everything in context at your project tempo before you drop it
+in. Where [Chord Progression Builder](../chord_progression_builder/) *writes* a new
+progression from scratch, Chord Reharmonizer *transforms an existing one.*
 
-## Purpose
-
-Take a finished chord loop (e.g. one CPB produced) and reharmonize a chosen section of it without
-hand-editing MIDI. Select bars/beats, choose a reharmonization technique, audition it in context,
-and apply. The tool handles the theory (which chords are available, how they voice, where they sit
-in time) so you stay focused on the musical choice.
-
-## How it works
-
-1. **Right-click a MIDI clip → "Reharmonize Section…".** The extension reads the clip's notes and
-   loop length, snapshots the Live Set's key + tempo, and opens the dialog (space-nebula theme,
-   same design language as CPB's studio-at-night).
-2. **The clip is analyzed into chord blocks** laid out on a bar/beat timeline, colored by a
-   circle-of-fifths hue wheel (harmonically close chords get chromatically close colors).
-3. **Select a section** to rewrite (see *Selecting a section* below). The originals inside the
-   selection dim, and a **ghost preview of your rewrite renders in place** over them.
-4. **Add a reharmonization** from one of the technique tabs, place chords by hand from the key
-   palette, or hit **🎲 Reimagine** for a random tasteful idea. Every tap makes a sound.
-5. **Listen** to the whole progression looping at project tempo — a playhead sweeps the timeline
-   and each chord lights up as it sounds — then **✦ Drop it in**.
-
-The extension stays a thin reader/writer: it only reads the clip + key at open time and applies the
-final rewrite. *All* analysis, editing, and rendering happen client-side in the dialog webview,
-with no round-trips in between (same architecture as CPB).
+![Chord Reharmonizer](documentation/ui.png)
 
 ## Features
 
-### Section selection (two ways)
-- **Click a chord block** to select it (you hear its actual notes); **shift-click** extends the span.
-- **Drag across the timeline** to select an arbitrary range (snaps to a ½-beat grid).
-- The selection has **draggable edge handles** and a **draggable middle** for fine-tuning, with a
-  live `rewriting N beats · from bar X` readout.
-- Adjusting an edge does **not** wipe the chords you've already built into the section — only a
-  fresh drag or a new chord-click reseeds it.
+- **Reads your clip into chords.** The extension analyzes the MIDI clip into chord
+  blocks laid out on a bar/beat timeline, colored by a circle-of-fifths hue wheel so
+  harmonically close chords get visually close colors.
+- **Opens in your key.** It snapshots your Live Set's root + scale on open, so every
+  suggestion is already in key. Override the key/mode at any time without losing your edits.
+- **Select any section** — click a chord block (you hear its real notes), shift-click to
+  extend, or drag across the timeline. Edge handles and a draggable middle fine-tune the
+  span, with a live `rewriting N beats · from bar X` readout.
+- **Context-aware reharmonization techniques** — each reads the chord that *follows* your
+  selection and offers musically correct options:
+  - **Turnarounds** — cadential templates that lead back to the next chord (`ii–V`,
+    `I–vi–ii–V`, `iii–vi–ii–V`, secondary-dominant, tritone-sub, and passing-diminished).
+  - **Approach** — a chord placed right before the next one (tritone sub, half-step below,
+    secondary dominant, leading-tone °7, parallel half-step).
+  - **Passing** — a chord that bridges the preceding and following chords.
+  - **All chords** — every diatonic and borrowed chord in the key; the ones that pull
+    toward the next chord are ★ starred.
+  - **🎲 Reimagine** — fills the section with a random, tasteful idea and plays it.
+- **Audition before you commit.** Suggestion chips *play* on a single click; a second
+  click (or the **+** button) commits them. Tapping a timeline block, a rewrite card, or
+  a palette chip plays it instantly.
+- **▶ Listen** plays the whole progression — your rewrite in context, original notes
+  around it — tempo-synced with a sweeping playhead and a **Loop** toggle that picks up
+  edits on the next pass. **▶ Section** auditions just the rewrite and the chord it
+  resolves into.
+- **Chord colors & voicings (CPB parity).** Per-chord extensions (9ths, 13ths, sus,
+  altered tensions) and voicings (Close, inversions, Open/drop-2, Drop-3, Wide, Rootless,
+  Shell) — recomputed from the canonical chord so transforms never compound.
+- **Sits in the part.** New chords are **register-anchored** to the original material's
+  range instead of jumping to middle C. Optional **Smooth voices** voice-leads from the
+  notes just before the selection, plus a **Velocity** slider and **Humanize** toggle.
+- **Multi-section editing.** **✓ Lock in** bakes the current section and frees the
+  selection for the next one — reharmonize several spots in a single pass, with a
+  32-deep **↩ undo** history.
+- **Write where you want.** Apply **into this clip** (rewrites in place as one undo step,
+  works for session *and* arrangement clips) or **as a new clip** (`"<original> (reharm)"`
+  in the next empty session slot). Applying slices the original notes at the selection
+  boundaries, so a chord ringing past the edge keeps its tail.
 
-### Sound previews everywhere (CPB parity)
-- Three Web Audio instruments — **Piano / Electric Piano / Synth** (or Muted) — shared with CPB.
-- Tapping a timeline block, a rewrite card, or any palette/technique chip **plays it instantly**;
-  applying a turnaround auto-plays the rewritten section with its resolution.
-- **▶ Listen** plays the *entire progression* (original notes outside the selection, your rewrite
-  inside it) at the project tempo, with a **Loop** toggle so it cycles while you tweak — edits made
-  mid-loop are picked up on the next pass. **▶ Section** auditions just the rewrite + one beat of
-  the chord it resolves into.
-- A comet **playhead** sweeps the timeline in sync; blocks, cards, and ghosts pulse as they sound.
+## Screenshots
 
-### Reharmonization techniques
-All technique suggestions are **context-aware**: they read the chord that *follows* your selection
-(looping back to the top of the progression where relevant) and offer the musically correct options.
+| | |
+|---|---|
+| **Context-aware techniques — Approach** | **Passing chords** |
+| ![Approach chords](documentation/approach.png) | ![Passing chords](documentation/passing.png) |
+| **Every chord in the key (★ pulls to the next)** | **Per-card color, voicing, length & order** |
+| ![All chords](documentation/all-chords.png) | ![Card inspector](documentation/card-inspector.png) |
 
-- **Turnarounds** — cadential templates that lead back to the next chord: `ii–V`, `I–vi–ii–V`,
-  `iii–vi–ii–V`, a secondary-dominant variant, a tritone-sub turnaround, and a passing-diminished
-  turnaround. Clicking one fills the section and plays it.
-- **Approach** — a short chord placed right before the next chord: tritone-sub from above,
-  half-step below, the secondary dominant, a leading-tone °7, or a parallel chord a half-step up.
-- **Passing** — a chord that bridges the preceding chord and the next one.
-- **All chords** — every diatonic and borrowed chord in the key; chords that pull toward the next
-  chord are **★ starred**.
-- **🎲 Reimagine** — fills the section with a random turnaround or approach idea and plays it.
+## Requirements
 
-### The rewrite editor
-- Seeds with the original chords in the selection (weighted by their real durations; dashed border
-  marks "from your original clip").
-- Cards are **drag-to-reorder**; clicking one opens a **plain-words inspector**: `½× shorter /
-  2× longer` with a live beats readout, `← earlier / later →`, `⧉ duplicate`, `✕ remove` — no
-  ambiguous glyph clusters. Keyboard: `1–7` add scale-degree chords, `←/→` select, `Shift+←/→`
-  reorder, `⌫` remove, `Space` listen, `⏎` apply.
-- **Color chips (CPB parity)** — per-card extensions/sus/altered tensions from CPB's
-  `CHORD_COLORS` table (Triad / 7th / 9th / 13th / 6 / 6-9 / ♯11 / sus / ♭9 / ♯9 … per chord
-  type), plus sets for the extra types the reharmonizer can *detect* (`6`, `m6`, `dim`, `aug`).
-  A card's **default color is its own detected sound** (a seeded C°7 stays C°7); picking any
-  other color renames the card CPB-style (`Cmaj7` + 9th → `Cmaj9`).
-- **Voicing chips (CPB parity)** — Close / 1st inv / 2nd inv / Open (drop-2) / Drop-3 / Wide /
-  Rootless / Shell, recomputed from the canonical close position so transforms never compound.
-  Rootless/Shell are disabled without a 7th, Drop-3 below 4 notes, and a color change that
-  removes the 7th falls back to Close automatically. Register anchoring and Smooth voices apply
-  on top, exactly as before.
-- **Register anchoring** — new chords are octave-shifted into the same register as the original
-  material, so the rewrite sits *in* the part instead of jumping to middle C.
-- **Smooth voices** (optional) — auto voice-leading seeded from the notes sounding just before the
-  selection, so the new chords flow out of what precedes them.
-- **Velocity** slider + **Humanize** toggle (timing/velocity drift) for the written chords.
-- **↺ Original chords** / **clear all** (an empty section is valid — applying clears those beats).
+- **Ableton Live Suite 12.4.5 or newer** (Extensions require Live Suite).
 
-### Key handling
-- Defaults to the **Live Set's root + scale**; if the scale is unset, you pick one.
-- **Override** the key/mode at any time — palette, roman numerals, and suggestions update, and your
-  card edits are preserved.
+## Install
 
-### Output — razor-edit apply
-- Applying **slices the original notes at the selection boundaries**: a chord that starts before
-  the selection keeps its head, one that rings past it keeps its tail, one spanning the whole
-  region keeps both. Only the part inside the span is replaced — selecting the last ¼ note of a
-  1-bar chord no longer deletes the whole chord.
-- Two destinations (dropdown next to the apply button):
-  - **into this clip** (default) — rewrites the source clip in place as **one undo step**; works
-    for session *and* arrangement clips.
-  - **as a new clip** — leaves the original untouched and writes the merged result to the next
-    empty session slot (named `"<original> (reharm)"`), appending a scene if every slot is full.
-- Inserted chords use CPB's deterministic **close voicing**, register-anchored, as sustained
-  block chords. The preview engine performs the *same* slice-merge, so what you hear is what
-  you get.
+1. Download `Chord-Reharmonizer-1.0.0.ablx` from the
+   [**Releases page**](https://github.com/notacap/ableton-extensions/releases).
+2. In Live, open **Preferences → Extensions**.
+3. Drag the `.ablx` file into the Extensions list (or use the install button).
+4. Right-click any **MIDI clip** and choose **Reharmonize Section…**.
 
-## Build & run
+> Note: Extensions are a Live Suite feature. The first time you install a
+> community extension you may need to confirm the install in Live's dialog.
+
+## How to use
+
+1. Right-click a MIDI clip → **Reharmonize Section…**.
+2. **Select a section** of the progression — click a chord block, shift-click to extend,
+   or drag across the timeline.
+3. Add a **turnaround / approach / passing** chord from the technique tabs, place chords
+   by hand from the key palette, or hit **🎲 Reimagine**. Single-click a chip to hear it,
+   click again (or **+**) to commit.
+4. Shape each card's **color**, **voicing**, length, and order; toggle **Smooth voices**
+   and **Humanize**; press **▶ Listen** to audition at your project tempo.
+5. (Optional) **✓ Lock in** the section and move on to another spot in the clip.
+6. Pick a destination and hit **✦ Drop it in** — the rewrite lands in your clip.
+
+## Building from source
+
+Requires Node ≥ 22.11.
 
 ```bash
 npm install
-npm run build       # tsc --noEmit type-check, then esbuild bundle (production)
-npm run build:dev   # same, with sourcemaps, no minify
-npm run start       # build:dev, then load into Live via extensions-cli (needs Live running)
-npm run package     # production build, then package into a distributable .ablx
+npm run build       # type-check + production bundle
+npm run package     # builds, then produces the distributable .ablx
+npm run start       # build:dev + launch in Live (needs Live running + EXTENSION_HOST_PATH in .env)
 ```
 
-Running in Live needs **Developer Mode** enabled (*Preferences → Extensions*) and
-`EXTENSION_HOST_PATH` set in `.env`. Logs go to `ExtensionHost.txt`.
+## How it works
 
-## Implementation notes
+The extension stays a thin reader/writer: it reads the clip + key once at open time and
+applies the final rewrite once. *All* analysis, editing, and rendering happen client-side
+in the dialog webview (which carries its own self-contained chord-detection and
+close-voicing engine — no `tonal` in the browser), with no round-trips in between.
 
-- **`src/extension.ts`** — SDK activation, the `tonal`-based chord palette (diatonic + curated
-  borrowed chords per mode, ported from CPB), the clip/key snapshot, and `writeReharmonizedClip`
-  (boundary slicing + in-place/new-clip apply). Registers `crh.open` on the `MidiClip`
-  context-menu scope.
-- **`src/dialog.html`** — the entire UI and engine: a self-contained close-voicing + chord-detection
-  implementation (the webview has no `tonal`), clip→chord-block analysis, the timeline + selection
-  state-machine, the ghost-preview renderer, the technique generators, register anchoring + auto
-  voice-leading, the CPB audio instruments + loop transport, and the postMessage bridge.
-- Data crosses the boundary exactly twice: `{ roots, modes, palette, live, clip }` baked into the
-  dialog at open time (string-replacing the `/*__DATA__*/null` placeholder), and a final
-  `{ action: 'apply', target, regionStart, regionEnd, notes }` posted back on apply
-  (`target` is `"replace"` or `"new"`; an empty `notes` list means "clear the span").
+- **`src/extension.ts`** — SDK activation, the `tonal`-based chord palette (diatonic +
+  curated borrowed chords per mode), the clip/key snapshot, and `writeReharmonizedClip`
+  (in-place / new-clip apply). Registers `crh.open` on the `MidiClip` context-menu scope.
+- **`src/dialog.html`** — the entire UI and engine: clip→chord-block analysis, the
+  timeline + selection state-machine, the ghost-preview renderer, the technique
+  generators, register anchoring + auto voice-leading, the Web Audio instruments + loop
+  transport, and the postMessage bridge.
 
-## Known limitations / caveats
+## Known limitations
 
-- **Assumes 4/4** — the SDK doesn't expose the clip's time signature, so the bar grid is fixed at 4
-  beats/bar.
-- **Chord-block detection is heuristic** (slice-and-merge by pitch-class set, with the bass note as a
-  root hint). It's tuned for root-position block chords like CPB output; dense or arpeggiated clips
-  may over-segment — the drag-select fallback covers those cases.
-- **Block-chord output only** — inserted chords are sustained blocks; they don't yet match the
-  existing clip's rhythmic pattern or per-chord velocity.
-- **"As a new clip" writes to a session slot** — for arrangement clips, use the default in-place
-  mode (which fully supports them).
-- **Not yet tested end-to-end in Live** — builds, type-checks, and the dialog logic is reviewed,
-  but the in-host run (WebView bridge + real clip write) is still unverified.
+- **Assumes 4/4** — the SDK doesn't expose the clip's time signature, so the bar grid is
+  fixed at 4 beats/bar.
+- **Chord-block detection is heuristic** — tuned for root-position block chords; dense or
+  arpeggiated clips may over-segment (the drag-select fallback covers those cases).
+- **Block-chord output** — inserted chords are sustained blocks; they don't yet match the
+  source clip's rhythm or per-chord velocity.
+- **"As a new clip" writes to a session slot** — for arrangement clips, use the default
+  in-place mode (which fully supports them).
+
+## Credits
+
+Built by **hello_nocap** with the
+[`@ableton-extensions/sdk`](https://www.ableton.com/) and the
+[`tonal`](https://github.com/tonaljs/tonal) music-theory library.
+
+## License
+
+Released under the [MIT License](LICENSE) © 2026 hello_nocap.

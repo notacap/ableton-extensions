@@ -11,6 +11,7 @@ them; more are on the way.
 | Extension | What it does |
 |---|---|
 | [**Chord Progression Builder**](chord_progression_builder/) | Right-click a MIDI track to build, audition, and write chord progressions — opens in your Set's key, with genre presets, voicings, rhythm patterns, and a built-in preview. |
+| [**Chord Reharmonizer**](chord_reharmonizer/) | Right-click a MIDI clip to reharmonize a section of an existing progression — add turnarounds, approach, and passing chords in your Set's key, auditioning everything in context before applying. |
 | [**Root Split**](root_split/) | Right-click a chord MIDI clip to split it into two new clips — one with only each chord's root note, the other with the remaining notes. Choose bass-note or true harmonic-root detection. |
 
 > 👉 **Click an extension's folder above** for its full feature list, screenshots, and
@@ -38,8 +39,8 @@ subdirectory and follow the build instructions in that extension's README (typic
 ## License
 
 Each extension is individually licensed — see the `LICENSE` file in its subdirectory.
-Chord Progression Builder and Root Split are both released under the
-[MIT License](chord_progression_builder/LICENSE).
+Chord Progression Builder, Chord Reharmonizer, and Root Split are all released under
+the [MIT License](chord_progression_builder/LICENSE).
 
 ---
 

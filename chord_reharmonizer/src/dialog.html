@@ -336,6 +336,13 @@
   .btn-write:disabled { opacity: .35; cursor: default; box-shadow: none; }
   .btn-ghost { background: transparent; color: var(--text-dim); border-color: transparent; }
   .btn-ghost:hover { color: var(--text); }
+  .btn-keep {
+    background: rgba(154,255,203,0.10); color: #9affcb;
+    border-color: rgba(154,255,203,0.35);
+  }
+  .btn-keep:hover { box-shadow: 0 0 12px rgba(154,255,203,0.25); }
+  .btn-keep:disabled { opacity: .35; cursor: default; box-shadow: none; }
+  .edits-tag { color: #9affcb; font-size: 10px; white-space: nowrap; }
   .apply-group { display: flex; align-items: center; gap: 6px; }
   .status { color: var(--accent); font-size: 11px; font-style: italic; }
   .kbd-hints { color: var(--text-dim); font-size: 10px; opacity: .7; }
@@ -365,6 +372,7 @@
       <span class="spacer-h"></span>
       <span class="sel-info" id="selInfo"></span>
       <button class="mini-btn hidden" id="selClearBtn" title="Clear the selection">✕ clear</button>
+      <button class="mini-btn" id="dupLoopBtn" title="Repeat the whole progression once — 2 bars become 4, 4 become 8. Undoable with ↩, written to Live on ✦ Drop it in">⧉ ×2 loop</button>
     </div>
     <div id="timeArea">
       <div id="ruler"></div>
@@ -439,7 +447,10 @@
     <span class="tempo-tag" id="tempoTag"></span>
     <span class="status" id="status"></span>
     <span class="spacer"></span>
-    <span class="kbd-hints">1–7 add chords · Space listen · ⌫ remove · ⏎ apply</span>
+    <span class="kbd-hints">1–7 add chords · Space listen · ⌫ remove · ⇧⏎ lock in · ⏎ drop in</span>
+    <span class="edits-tag hidden" id="editsTag"></span>
+    <button class="action btn-ghost hidden" id="undoCommitBtn" title="Undo the last locked-in section">↩ undo</button>
+    <button class="action btn-keep" id="commitBtn" title="Bake this section into the working clip and pick another — nothing is written to Live until ✦ Drop it in">✓ Lock in</button>
     <button class="action btn-ghost" id="cancelBtn">Cancel</button>
     <div class="apply-group">
       <select id="applyTarget" title="Where the rewrite lands">
@@ -457,8 +468,9 @@ const { roots: ROOTS, modes: MODES, palette: PALETTE, live: LIVE, clip: CLIP } =
 
 const EPS = 1e-6;
 const BEATS_PER_BAR = 4;            // SDK does not expose time signature; assume 4/4
-const NOTE_FLAT = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
-const PC = { C:0,"C#":1,Db:1,"D♭":1,D:2,"D#":3,Eb:3,"E♭":3,E:4,F:5,"F#":6,Gb:6,"G♭":6,G:7,"G#":8,Ab:8,"A♭":8,A:9,"A#":10,Bb:10,"B♭":10,B:11 };
+const NOTE_FLAT  = ["C","D♭","D","E♭","E","F","G♭","G","A♭","A","B♭","B"];
+const NOTE_SHARP = ["C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B"];
+const PC = { C:0,"C#":1,"C♯":1,Db:1,"D♭":1,D:2,"D#":3,"D♯":3,Eb:3,"E♭":3,E:4,F:5,"F#":6,"F♯":6,Gb:6,"G♭":6,G:7,"G#":8,"G♯":8,Ab:8,"A♭":8,A:9,"A#":10,"A♯":10,Bb:10,"B♭":10,B:11 };
 function pcOf(name){ return PC[(name||"").replace(/[0-9]/g,"")] ?? 0; }
 function asc(a){ return a.slice().sort((x,y)=>x-y); }
 function avg(a){ return a.reduce((x,y)=>x+y,0)/a.length; }
@@ -481,7 +493,22 @@ const DEG_ROMAN = ["I","♭II","II","♭III","III","IV","♯IV","V","♭VI","VI"
 const CO5 = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
 function hueOf(rootPc){ return CO5.indexOf(((rootPc % 12) + 12) % 12) * 30; }
 
-function nameOf(rootPc, type){ return NOTE_FLAT[((rootPc%12)+12)%12] + (TYPE_SUFFIX[type] ?? type); }
+// Key-aware spelling, mirroring the extension: in-scale roots always use the
+// key's preferred accidentals (PALETTE noteNames — the diatonic palette roots
+// double as the scale). For CHROMATIC roots, an explicit accidental in the
+// roman hint steers the direction — ♭II7 stays B♭7 in sharp keys, ♯iv°7 stays
+// F♯°7 in flat keys. First accidental in the string decides.
+function keyNames(){ return curPalette().noteNames || NOTE_FLAT; }
+function spellPc(pc, roman){
+  pc = ((pc % 12) + 12) % 12;
+  const names = keyNames();
+  if ((curPalette().diatonic || []).some(c => pcOf(c.rootName) === pc)) return names[pc];
+  const r = roman || "";
+  const si = r.indexOf("♯"), fi = r.indexOf("♭");
+  const arr = si >= 0 && (fi < 0 || si < fi) ? NOTE_SHARP : fi >= 0 ? NOTE_FLAT : names;
+  return arr[pc];
+}
+function nameOf(rootPc, type, roman){ return spellPc(rootPc, roman) + (TYPE_SUFFIX[type] ?? type); }
 
 /** Close voicing matching the extension's algorithm: anchor root into [54..65], stack up. */
 function voicing(rootPc, type){
@@ -760,11 +787,13 @@ let VEL = 96, HUMANIZE = true, SMOOTH = false, LOOPPLAY = true;
 // Every card is born with the default color (= its own sound) and Close voicing;
 // recomputeSlot derives midi/name/hasSeventh from that state.
 function makeSlot(opts){
+  // Resolve the roman first — its accidental (if any) steers the spelling.
+  const roman = opts.roman || romanFor(opts.rootPc, opts.type);
   const s = {
     rootPc: opts.rootPc, type: opts.type,
-    rootName: opts.rootName || NOTE_FLAT[((opts.rootPc % 12) + 12) % 12],
-    baseName: opts.name || nameOf(opts.rootPc, opts.type),
-    roman: opts.roman || romanFor(opts.rootPc, opts.type),
+    rootName: opts.rootName || spellPc(opts.rootPc, roman),
+    baseName: opts.name || nameOf(opts.rootPc, opts.type, roman),
+    roman,
     weight: opts.weight || 1,
     origin: opts.origin || "tech",
     color: defaultColorKey(opts.type),
@@ -1270,7 +1299,8 @@ function paintSelection(){
 }
 
 function renderCards(){
-  confirmEmptyApply = false;   // any edit/selection change disarms the empty-apply confirm
+  confirmEmptyApply = false;   // any edit/selection change disarms pending confirms
+  confirmDiscard = false;
   const host = $("cards");
   host.innerHTML = "";
   if (selStart === null){
@@ -1362,7 +1392,7 @@ function tabTip(){
     case "turn":     return "Classic cadences that pull back " + (t ? "to " + t : "home") + ". Click to hear one — double-click or + fills the section with it.";
     case "approach": return "Slide in from a half-step away" + (t ? " — next chord is " + t : "") + ". Click to hear it; double-click or + tacks it onto the end.";
     case "pass":     return "Bridge chords that connect what came before to what comes next" + (t ? " (" + t + ")" : "") + ". Click to hear, double-click or + to add.";
-    default:         return "The full palette in " + NOTE_FLAT[keyRootPc()] + " " + keyMode + ". ★ = pulls toward the next chord. Click to hear, double-click or + to add.";
+    default:         return "The full palette in " + keyNames()[keyRootPc()] + " " + keyMode + ". ★ = pulls toward the next chord. Click to hear, double-click or + to add.";
   }
 }
 
@@ -1427,7 +1457,7 @@ function renderApproach(body){
     { rootPc: (r+1)%12,  type: t.type, roman: "",       sub: "parallel ½-step above" },
   ];
   body.appendChild(chipRow(items.map(i => ({
-    label: nameOf(i.rootPc, i.type), sub: i.sub, hue: hueOf(i.rootPc), mode: "append",
+    label: nameOf(i.rootPc, i.type, i.roman), sub: i.sub, hue: hueOf(i.rootPc), mode: "append",
     make: () => [slotFromChord(i.rootPc, i.type, i.roman || undefined, 0.5)]
   }))));
 }
@@ -1443,7 +1473,7 @@ function renderPass(body){
     { rootPc: (tr+2)%12, type: "m7",   roman: "iim7/x", sub: "sets up a ii–V into it" },
   ];
   body.appendChild(chipRow(items.map(i => ({
-    label: nameOf(i.rootPc, i.type), sub: i.sub, hue: hueOf(i.rootPc), mode: "append",
+    label: nameOf(i.rootPc, i.type, i.roman), sub: i.sub, hue: hueOf(i.rootPc), mode: "append",
     make: () => [slotFromChord(i.rootPc, i.type, i.roman, 0.5)]
   }))));
 }
@@ -1650,16 +1680,26 @@ window.addEventListener("pointerup", () => {
 $("selClearBtn").onclick = () => { selStart = selEnd = null; finalizeSelection(false); };
 
 // ── Wiring ───────────────────────────────────────────────────────────────────
+// Each root option is spelled the way its own key prefers in the current mode
+// (D♭ major but C♯ minor), so the dropdown always matches the palette.
+function rootLabel(i){
+  const p = PALETTE[`${keyMode}|${ROOTS[i]}`];
+  return (p && p.noteNames ? p.noteNames : NOTE_FLAT)[i];
+}
 function buildKeySelectors(){
   const r = $("keyRoot"); r.innerHTML = "";
-  ROOTS.forEach((n, i) => { const o = document.createElement("option"); o.value = n; o.textContent = NOTE_FLAT[i]; r.appendChild(o); });
+  ROOTS.forEach((n, i) => { const o = document.createElement("option"); o.value = n; o.textContent = rootLabel(i); r.appendChild(o); });
   r.value = keyRootName;
   const m = $("keyMode"); m.innerHTML = "";
   MODES.forEach(md => { const o = document.createElement("option"); o.value = md; o.textContent = md; m.appendChild(o); });
   m.value = keyMode;
   // Changing key re-labels romans + palette but never throws away your cards.
   r.onchange = () => { keyRootName = r.value; renderAll(); };
-  m.onchange = () => { keyMode = m.value; renderAll(); };
+  m.onchange = () => {
+    keyMode = m.value;
+    [...r.options].forEach((o, i) => { o.textContent = rootLabel(i); });
+    renderAll();
+  };
 }
 
 $("cards").addEventListener("click", e => {
@@ -1742,31 +1782,141 @@ function postToHost(data){
   if (window.webkit?.messageHandlers?.live) window.webkit.messageHandlers.live.postMessage(msg);
   else if (window.chrome?.webview) window.chrome.webview.postMessage(msg);
 }
-function updateApply(){ $("applyBtn").disabled = selStart === null; }
-// With the blank-slate default, an empty rewrite is one stray click away from
-// wiping the section — so an empty apply asks for a second click to confirm.
+function updateApply(){
+  $("applyBtn").disabled = selStart === null && !editCount;
+  $("commitBtn").disabled = selStart === null;
+  $("undoCommitBtn").classList.toggle("hidden", !history.length);
+  const tag = $("editsTag");
+  tag.classList.toggle("hidden", !editCount);
+  if (editCount) tag.textContent = "✓ " + editCount + " edit" + (editCount === 1 ? "" : "s") + " locked in";
+}
+
+// ── Multi-section editing ────────────────────────────────────────────────────
+// "Lock in" bakes the current section into the dialog's working copy of the
+// clip — the same razor edit the host used to perform — then re-detects the
+// chord blocks and frees the selection for the next section. Nothing touches
+// Live until ✦ Drop it in, which sends the whole working note list in one shot.
+let editCount = 0;
+const history = [];   // pre-edit {notes, loopEnd} snapshots, newest last — in-dialog undo
+function pushHistory(){
+  history.push({ notes: CLIP.notes, loopEnd: CLIP.loopEnd });
+  if (history.length > 32) history.shift();
+}
+// An empty rewrite means "silence these beats" — one stray click away from
+// wiping a section, so empty lock-ins/applies ask for a second click.
 let confirmEmptyApply = false;
-function apply(){
-  if (selStart === null) return;
+
+// Slice originals at the selection boundaries (heads and tails survive) and
+// replace the inside with the rewrite, in the working note list.
+function bakeSelection(){
+  const incoming = renderRegionNotes();
+  const kept = [];
+  for (const n of CLIP.notes){
+    const s = n.startTime, e = s + n.duration;
+    if (e <= selStart + EPS || s >= selEnd - EPS){ kept.push(n); continue; }
+    if (s < selStart - EPS) kept.push({ pitch: n.pitch, startTime: s, duration: +(selStart - s).toFixed(5), velocity: n.velocity });
+    if (e > selEnd + EPS) kept.push({ pitch: n.pitch, startTime: +selEnd.toFixed(5), duration: +(e - selEnd).toFixed(5), velocity: n.velocity });
+  }
+  CLIP.notes = [...kept, ...incoming].sort((a, b) => a.startTime - b.startTime || a.pitch - b.pitch);
+}
+
+function commitSection(){
+  if (selStart === null){ setStatus("Select a section first — tap a chord up top."); return; }
   if (!slots.length && !confirmEmptyApply){
     confirmEmptyApply = true;
-    setStatus("The rewrite is empty — applying will clear this section. Click Apply again if that's what you want.");
+    setStatus("The rewrite is empty — locking in will silence this section. Click ✓ again to confirm.");
     return;
   }
   stopPlayback();
+  pushHistory();
+  bakeSelection();
+  editCount++;
+  selStart = selEnd = null;
+  slots = []; selectedCard = null;
+  analyzeBlocks();
+  paintSelection(); renderAll();
+  setStatus("✓ Locked in — nothing's written to Live yet. Pick the next section, or ✦ Drop it in.");
+}
+
+function undoCommit(){
+  if (!history.length) return;
+  stopPlayback();
+  const h = history.pop();
+  CLIP.notes = h.notes;
+  CLIP.loopEnd = h.loopEnd;
+  editCount = Math.max(0, editCount - 1);
+  selStart = selEnd = null;
+  slots = []; selectedCard = null;
+  analyzeBlocks();
+  paintSelection(); renderAll(); renderClipBadge();
+  setStatus("↩ Last edit undone.");
+}
+
+// ⧉ ×2 loop — repeat the whole working progression once (2 bars → 4, 4 → 8).
+// Notes are sliced to the loop the same way the razor edit does, so a tail
+// ringing past the loop end isn't duplicated. Counts as a locked-in edit:
+// same undo history, and nothing touches Live until ✦ Drop it in (the host
+// extends the clip's loop to match).
+const MAX_LOOP_BEATS = 256;   // 64 bars at 4/4 — runaway-click guard
+function doubleLoop(){
+  const L = span();
+  if (L * 2 > MAX_LOOP_BEATS){
+    setStatus("That's already " + fmt(L / BEATS_PER_BAR) + " bars — doubling past " + (MAX_LOOP_BEATS / BEATS_PER_BAR) + " is probably a misclick.");
+    return;
+  }
+  stopPlayback();
+  pushHistory();
+  const copies = [];
+  for (const n of CLIP.notes){
+    const s = n.startTime, e = s + n.duration;
+    if (e <= CLIP.loopStart + EPS || s >= CLIP.loopEnd - EPS) continue;
+    const cs = Math.max(s, CLIP.loopStart), ce = Math.min(e, CLIP.loopEnd);
+    copies.push({ pitch: n.pitch, startTime: +(cs + L).toFixed(5), duration: +(ce - cs).toFixed(5), velocity: n.velocity });
+  }
+  CLIP.notes = [...CLIP.notes, ...copies].sort((a, b) => a.startTime - b.startTime || a.pitch - b.pitch);
+  CLIP.loopEnd += L;
+  editCount++;
+  analyzeBlocks();
+  paintSelection(); renderAll(); renderClipBadge();
+  setStatus("⧉ Doubled to " + fmt(span() / BEATS_PER_BAR) + " bars — the back half is a copy, ready to reimagine. ↩ undoes it.");
+}
+
+function apply(){
+  if (selStart === null && !editCount){ setStatus("Nothing to drop in yet — select a section and sketch its replacement."); return; }
+  if (selStart !== null && !slots.length && !confirmEmptyApply){
+    confirmEmptyApply = true;
+    setStatus("The selected section's rewrite is empty — applying will clear those beats. Click Apply again if that's what you want.");
+    return;
+  }
+  stopPlayback();
+  if (selStart !== null) bakeSelection();   // fold the in-progress section in too
   postToHost({
     action: "apply",
     target: $("applyTarget").value,
-    regionStart: +selStart.toFixed(5),
-    regionEnd: +selEnd.toFixed(5),
-    notes: renderRegionNotes(),
+    notes: CLIP.notes,
+    loopEnd: CLIP.loopEnd,   // ×2 loop may have grown it — host extends the clip to match
   });
 }
+// Locked-in sections live only in this dialog — closing throws them away,
+// so a close with pending work asks once before discarding.
+let confirmDiscard = false;
+function cancelDialog(){
+  if (editCount && !confirmDiscard){
+    confirmDiscard = true;
+    setStatus("You have " + editCount + " locked-in edit" + (editCount === 1 ? "" : "s") + " not yet in Live — Cancel/Esc again to discard.");
+    return;
+  }
+  stopPlayback();
+  postToHost({ action: "cancel" });
+}
 $("applyBtn").onclick = apply;
-$("cancelBtn").onclick = () => { stopPlayback(); postToHost({ action: "cancel" }); };
+$("commitBtn").onclick = commitSection;
+$("undoCommitBtn").onclick = undoCommit;
+$("dupLoopBtn").onclick = doubleLoop;
+$("cancelBtn").onclick = cancelDialog;
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape"){ stopPlayback(); postToHost({ action: "cancel" }); return; }
+  if (e.key === "Escape"){ cancelDialog(); return; }
   const tag = (e.target.tagName || "").toUpperCase();
   if (tag === "SELECT" || tag === "INPUT" || tag === "TEXTAREA") return;
   if (e.key >= "1" && e.key <= "7"){
@@ -1774,7 +1924,8 @@ document.addEventListener("keydown", e => {
   } else if (e.key === " "){
     playWhole(); e.preventDefault();
   } else if (e.key === "Enter"){
-    if (!$("applyBtn").disabled) apply();
+    if (e.shiftKey){ if (!$("commitBtn").disabled) commitSection(); }
+    else if (!$("applyBtn").disabled) apply();
   } else if (e.key === "Backspace" || e.key === "Delete"){
     if (selectedCard !== null){ removeCard(selectedCard); e.preventDefault(); }
   } else if (e.key === "ArrowLeft"){
@@ -1793,15 +1944,16 @@ document.addEventListener("keydown", e => {
 // ── Boot ─────────────────────────────────────────────────────────────────────
 buildKeySelectors();
 analyzeBlocks();
-$("clipBadge").textContent = "♪ " + (CLIP.name || "Clip") + " · " + fmt(span() / BEATS_PER_BAR) + " bars";
+function renderClipBadge(){ $("clipBadge").textContent = "♪ " + (CLIP.name || "Clip") + " · " + fmt(span() / BEATS_PER_BAR) + " bars"; }
+renderClipBadge();
 if (LIVE.mode){
   const badge = $("liveBadge");
-  badge.textContent = "✦ " + NOTE_FLAT[LIVE.rootIndex] + " " + LIVE.mode + " — from Live";
+  badge.textContent = "✦ " + rootLabel(LIVE.rootIndex) + " " + LIVE.mode + " — from Live";
   badge.classList.remove("hidden");
 }
 $("tempoTag").textContent = "@ " + Math.round(LIVE.tempo || 120) + " BPM";
 renderAll();
-setStatus("Tap a chord — or drag across the strip — and reimagine it.");
+setStatus("Tap a chord — or drag across the strip — and reimagine it. ✓ Lock in as many sections as you like, then drop them all in at once.");
 </script>
 </body>
 </html>
