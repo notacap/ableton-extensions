@@ -47,7 +47,7 @@ clip with one click.
 
 ## Install
 
-1. Download `Chord-Progression-Builder-1.0.0.ablx` from the
+1. Download `Chord-Progression-Builder-1.0.1.ablx` from the
    [**Releases page**](https://github.com/notacap/ableton-extensions/releases).
 2. In Live, open **Preferences → Extensions**.
 3. Drag the `.ablx` file into the Extensions list (or use the install button).
