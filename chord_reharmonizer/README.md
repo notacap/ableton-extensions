@@ -10,7 +10,7 @@ by hand — auditioning everything in context at your project tempo before you d
 in. Where [Chord Progression Builder](../chord_progression_builder/) *writes* a new
 progression from scratch, Chord Reharmonizer *transforms an existing one.*
 
-![Chord Reharmonizer](documentation/ui.png)
+![Chord Reharmonizer](documentation/chord_reharmonizer_UI.png)
 
 ## Features
 
@@ -63,12 +63,27 @@ progression from scratch, Chord Reharmonizer *transforms an existing one.*
 
 ## Screenshots
 
+**Your progression on a bar/beat timeline — click or drag to pick the section to reharmonize:**
+
+![Progression timeline](documentation/chord_progression_blocks.png)
+
+Context-aware technique tabs — each reads the chord that *follows* your selection:
+
 | | |
 |---|---|
-| **Context-aware techniques — Approach** | **Passing chords** |
-| ![Approach chords](documentation/approach.png) | ![Passing chords](documentation/passing.png) |
-| **Every chord in the key (★ pulls to the next)** | **Per-card color, voicing, length & order** |
-| ![All chords](documentation/all-chords.png) | ![Card inspector](documentation/card-inspector.png) |
+| **Turnarounds** | **Approach** |
+| ![Turnarounds](documentation/replacement_chords_turnaround.png) | ![Approach chords](documentation/replacement_chords_approach.png) |
+| **Passing chords** | **Every chord in the key (★ pulls to the next)** |
+| ![Passing chords](documentation/replacement_chords_passing.png) | ![All chords](documentation/replacement_chords_all_chords.png) |
+
+| | |
+|---|---|
+| **Per-card color, voicing, length & order** | **Audition: ▶ Listen / Loop / ▶ Section** |
+| ![Card inspector](documentation/replacement_chords_variation.png) | ![Playback options](documentation/playback_options.png) |
+
+**Drop the rewrite into the source clip or a new one:**
+
+![Output options](documentation/midi_output_options.png)
 
 ## Requirements
 
