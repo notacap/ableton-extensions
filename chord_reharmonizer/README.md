@@ -32,7 +32,14 @@ progression from scratch, Chord Reharmonizer *transforms an existing one.*
   - **Passing** — a chord that bridges the preceding and following chords.
   - **All chords** — every diatonic and borrowed chord in the key; the ones that pull
     toward the next chord are ★ starred.
-  - **🎲 Reimagine** — fills the section with a random, tasteful idea and plays it.
+  - **🎲 Reimagine** — rolls a progression that *resolves into whatever follows the
+    selection*: chords are generated backward from the next chord (dominants, ii–Vs,
+    tritone subs, leading-tone °7s, borrowed colors) and auto-played. Pick **how many
+    chords** (auto / 1–6 — auto fits the selection length) and a **vibe** — *subtle*
+    never leaves the key, *classic* adds secondary dominants and stock turnarounds,
+    *spicy* raids the spice rack. **📌 Pin** the cards you like and reroll: pinned
+    chords survive untouched and rerolled ones keep their rhythm, so a roll converges
+    instead of starting over.
 - **Audition before you commit.** Suggestion chips *play* on a single click; a second
   click (or the **+** button) commits them. Tapping a timeline block, a rewrite card, or
   a palette chip plays it instantly.
@@ -84,8 +91,9 @@ progression from scratch, Chord Reharmonizer *transforms an existing one.*
 2. **Select a section** of the progression — click a chord block or drag across the
    timeline (shift-click a block to audition it without changing the selection).
 3. Add a **turnaround / approach / passing** chord from the technique tabs, place chords
-   by hand from the key palette, or hit **🎲 Reimagine**. Single-click a chip to hear it,
-   click again (or **+**) to commit.
+   by hand from the key palette, or hit **🎲 Reimagine** (set the chord count + vibe next
+   to the dice, 📌 pin keepers between rolls). Single-click a chip to hear it, click again
+   (or **+**) to commit.
 4. Shape each card's **color**, **voicing**, length, and order; toggle **Smooth voices**
    and **Humanize**; press **▶ Listen** to audition at your project tempo.
 5. (Optional) **✓ Lock in** the section and move on to another spot in the clip.

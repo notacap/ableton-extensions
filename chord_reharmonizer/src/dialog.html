@@ -235,6 +235,18 @@
     color: var(--text-dim); font-size: 11px; cursor: pointer;
   }
   .card .x:hover { background: #3a2240; color: #ffc2e0; }
+  /* 📌 pin — survives the dice. Faint until hovered; lit + gold ring when on. */
+  .card .pin {
+    position: absolute; top: 2px; left: 4px; width: 15px; height: 15px;
+    line-height: 14px; text-align: center; border-radius: 3px;
+    font-size: 9px; cursor: pointer;
+    opacity: 0; filter: grayscale(1) brightness(1.5);
+    transition: opacity .12s, filter .12s;
+  }
+  .card:hover .pin { opacity: .55; }
+  .card .pin:hover { opacity: 1; background: #3a2240; }
+  .card.pinned .pin { opacity: 1; filter: none; }
+  .card.pinned:not(.selected) { border-color: rgba(255,227,168,0.75); box-shadow: 0 0 9px rgba(255,227,168,0.18); }
   .cards-empty { color: var(--text-dim); font-style: italic; padding: 18px 6px; font-size: 11px; }
 
   /* ── Inspector (selected card editor) — plain words, no mystery glyphs ── */
@@ -277,6 +289,12 @@
     border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 11px;
     transition: box-shadow .12s, transform .12s;
   }
+  .dice-sel {
+    background: var(--surface-2); color: var(--text-dim);
+    border: 1px solid rgba(255,139,214,0.25); border-radius: 999px;
+    padding: 3px 5px; font-size: 10px; max-width: 76px;
+  }
+  .dice-sel:hover { color: var(--text); border-color: rgba(255,139,214,0.55); }
   .dice-btn:hover { box-shadow: 0 0 12px rgba(255,139,214,0.35); transform: translateY(-1px); }
   .tip { color: var(--text-dim); font-size: 10px; margin: 0 0 7px; min-height: 13px; font-style: italic; }
   #tabBody { flex: 1; min-height: 0; overflow-y: auto; }
@@ -433,7 +451,17 @@
         <button data-tab="pass">Passing</button>
         <button data-tab="palette">All chords</button>
         <span class="spacer-h"></span>
-        <button class="dice-btn" id="diceBtn" title="Fill the section with a random idea — keep rolling until something hits">🎲 Reimagine</button>
+        <select id="diceCount" class="dice-sel" title="How many chords the dice rolls — auto fits the length of your selection">
+          <option value="auto" selected>auto</option>
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+        </select>
+        <select id="diceVibe" class="dice-sel" title="How adventurous the dice gets — subtle stays in the key, spicy raids the spice rack">
+          <option value="subtle">subtle</option>
+          <option value="classic" selected>classic</option>
+          <option value="spicy">spicy</option>
+        </select>
+        <button class="dice-btn" id="diceBtn" title="Roll a progression that resolves into what comes next — 📌 pin cards to keep them and reroll the rest">🎲 Reimagine</button>
       </div>
       <p class="tip" id="tabTip"></p>
       <div id="tabBody"></div>
@@ -798,6 +826,7 @@ function makeSlot(opts){
     origin: opts.origin || "tech",
     color: defaultColorKey(opts.type),
     voicing: "close",
+    pinned: false,
   };
   recomputeSlot(s);
   return s;
@@ -1311,7 +1340,7 @@ function renderCards(){
     const spans = slotSpans();
     slots.forEach((s, i) => {
       const el = document.createElement("div");
-      el.className = "card" + (s.origin === "orig" ? " orig-card" : "") + (i === selectedCard ? " selected" : "");
+      el.className = "card" + (s.origin === "orig" ? " orig-card" : "") + (i === selectedCard ? " selected" : "") + (s.pinned ? " pinned" : "");
       el.id = "card-" + i;
       el.dataset.idx = i;
       el.draggable = true;
@@ -1319,6 +1348,7 @@ function renderCards(){
       el.title = s.origin === "orig" ? "From your original clip — click to edit, drag to reorder"
                                      : "Click to edit, drag to reorder";
       el.innerHTML =
+        `<span class="pin" data-pin="${i}" title="${s.pinned ? "Pinned — the dice can't touch it. Click to unpin" : "Pin this chord so 🎲 keeps it and rerolls the rest"}">📌</span>` +
         `<span class="x" data-rm="${i}" title="Remove this chord">✕</span>` +
         `<div class="c-name">${s.name}</div>` +
         `<div class="c-roman">${s.roman}</div>` +
@@ -1576,29 +1606,104 @@ function selectCard(i){
   previewCard(i);
 }
 
-// 🎲 Reimagine — a random tasteful idea for the selected span.
+// ── 🎲 Reimagine — roll a progression that resolves into what comes next ─────
+// The dice chain BACKWARD from the chord after the selection (loop-aware): each
+// rolled chord is chosen for how it pulls into the one that follows it, so every
+// roll lands somewhere on purpose. The vibe picks the move pool; 📌 pinned cards
+// survive the roll and rerolled cards keep their timing.
+const pick = a => a[Math.floor(Math.random() * a.length)];
+function weightedPick(weights){
+  let r = Math.random() * Object.values(weights).reduce((a, b) => a + b, 0);
+  for (const k in weights){ r -= weights[k]; if (r <= 0) return k; }
+  return Object.keys(weights)[0];
+}
+const DICE_MOVES = {
+  subtle:  { diatonic: 0.60, dominant: 0.22, ii: 0.18 },                  // never leaves the key
+  classic: { diatonic: 0.32, dominant: 0.26, ii: 0.18, dim: 0.12, tritone: 0.12 },
+  spicy:   { diatonic: 0.10, dominant: 0.14, ii: 0.08, dim: 0.15, tritone: 0.18, borrowed: 0.25, chroma: 0.10 },
+};
+function diatonicAt(pc){
+  pc = ((pc % 12) + 12) % 12;
+  return (curPalette().diatonic || []).find(c => pcOf(c.rootName) === pc) || null;
+}
+function slotFromPalEntry(c){
+  return makeSlot({ rootPc: pcOf(c.rootName), type: c.type, name: c.name, roman: c.roman, rootName: c.rootName });
+}
+// One backward step: a chord that wants to move into `f` ({rootPc, type}).
+function genStep(f, vibe){
+  const pal = curPalette();
+  const moves = { ...DICE_MOVES[vibe] };
+  if (!(pal.borrowed || []).length) delete moves.borrowed;
+  for (let tries = 0; tries < 8; tries++){
+    const m = weightedPick(moves);
+    let s = null;
+    if (m === "dominant"){
+      const d = diatonicAt(f.rootPc + 7);
+      s = vibe === "subtle" ? (d && slotFromPalEntry(d)) : slotFromChord((f.rootPc + 7) % 12, "7", "V7/x");
+    } else if (m === "ii"){
+      const d = diatonicAt(f.rootPc + 2);
+      s = vibe === "subtle" ? (d && slotFromPalEntry(d)) : slotFromChord((f.rootPc + 2) % 12, "m7", "ii/x");
+    } else if (m === "tritone"){
+      s = slotFromChord((f.rootPc + 1) % 12, "7", "♭II7");
+    } else if (m === "dim"){
+      s = slotFromChord((f.rootPc + 11) % 12, "dim7", "vii°7→");
+    } else if (m === "chroma"){
+      s = slotFromChord((f.rootPc + 1) % 12, CHORD_INTERVALS[f.type] ? f.type : "maj");
+    } else if (m === "borrowed"){
+      s = slotFromPalEntry(pick(pal.borrowed));
+    } else {  // diatonic — half the time take the circle-of-fifths pull into f
+      const d = pal.diatonic || [];
+      if (!d.length) s = slotFromDiatonic(Math.floor(Math.random() * 7));
+      else {
+        const pull = diatonicAt(f.rootPc + 7);
+        s = slotFromPalEntry(pull && Math.random() < 0.5 ? pull : pick(d));
+      }
+    }
+    if (s && !(s.rootPc === ((f.rootPc % 12) + 12) % 12 && s.type === f.type)) return s;
+  }
+  return slotFromDiatonic(Math.floor(Math.random() * 7));   // pool exhausted — stay in key
+}
+// "auto" ≈ one chord per half-bar, capped at 6.
+function autoCount(){ return Math.min(6, Math.max(1, Math.round((selEnd - selStart) / 2))); }
+
 function reimagine(){
   if (selStart === null){ setStatus("Select a section first — tap a chord up top."); return; }
-  const pick = a => a[Math.floor(Math.random() * a.length)];
-  const r = Math.random();
-  if (r < 0.55){
-    const t = pick(TURNS);
-    slots = t.build ? t.build() : t.deg.map(d => slotFromDiatonic(d));
-  } else {
-    seedSlots();
-    const t = targetChord();
-    if (t){
-      const opts = [
-        () => slots.push(slotFromChord((t.rootPc + 1) % 12, "7", "♭II7→", 0.5)),
-        () => slots.push(slotFromChord((t.rootPc + 7) % 12, "7", "V7/x", 0.5)),
-        () => slots.push(slotFromChord((t.rootPc + 11) % 12, "dim7", "vii°7→", 0.5)),
-      ];
-      pick(opts)();
+  const vibe = $("diceVibe").value;
+  const tgt = targetChord() || { rootPc: keyRootPc(), type: /minor/i.test(keyMode) ? "m" : "maj" };
+  const nPinned = slots.filter(s => s.pinned).length;
+  if (nPinned && nPinned < slots.length){
+    // Reroll around the pins: same chord count, same rhythm — only the
+    // unpinned cards change, each rolled against whatever now follows it.
+    let next = tgt;
+    for (let i = slots.length - 1; i >= 0; i--){
+      if (!slots[i].pinned){
+        const g = genStep(next, vibe);
+        g.weight = slots[i].weight;
+        slots[i] = g;
+      }
+      next = slots[i];
     }
+    setStatus(`🎲 Rerolled around ${nPinned} pinned chord${nPinned > 1 ? "s" : ""} — roll again or unpin.`);
+  } else if (nPinned){
+    setStatus("Everything is pinned — unpin a card to let the dice touch it.");
+    return;
+  } else {
+    const cv = $("diceCount").value;
+    const n = cv === "auto" ? autoCount() : +cv;
+    // On auto + a tame vibe, sometimes reach for a classic turnaround shape.
+    if (cv === "auto" && vibe !== "spicy" && n >= 2 && Math.random() < 0.4){
+      const t = pick(vibe === "subtle" ? TURNS.filter(x => x.deg) : TURNS);
+      slots = t.build ? t.build() : t.deg.map(d => slotFromDiatonic(d));
+    } else {
+      const out = [];
+      let next = tgt;
+      for (let i = 0; i < n; i++){ const g = genStep(next, vibe); out.unshift(g); next = g; }
+      slots = out;
+    }
+    setStatus(`🎲 ${slots.length} chord${slots.length > 1 ? "s" : ""}, ${vibe} — listen, 📌 pin keepers, roll again.`);
   }
   selectedCard = null;
   renderCards(); paintSelection();
-  setStatus("🎲 Reimagined — listen, tweak, or roll again.");
   playSection();
 }
 
@@ -1731,6 +1836,13 @@ function buildKeySelectors(){
 }
 
 $("cards").addEventListener("click", e => {
+  const pin = e.target.closest("[data-pin]");
+  if (pin){
+    e.stopPropagation();
+    const s = slots[+pin.dataset.pin];
+    if (s){ s.pinned = !s.pinned; renderCards(); }
+    return;
+  }
   const rm = e.target.closest("[data-rm]");
   if (rm){ e.stopPropagation(); removeCard(+rm.dataset.rm); return; }
   const card = e.target.closest(".card");
