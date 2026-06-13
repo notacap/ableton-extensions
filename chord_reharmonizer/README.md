@@ -81,9 +81,9 @@ Context-aware technique tabs — each reads the chord that *follows* your select
 | **Per-card color, voicing, length & order** | **Audition: ▶ Listen / Loop / ▶ Section** |
 | ![Card inspector](documentation/replacement_chords_variation.png) | ![Playback options](documentation/playback_options.png) |
 
-**Drop the rewrite into the source clip or a new one:**
+**✓ Lock in** the current section to commit it and keep reharmonizing more spots in the same pass — then drop the whole rewrite into the source clip or a new one:
 
-![Output options](documentation/midi_output_options.png)
+![Lock in, destination, and drop-in options](documentation/midi_output_options.png)
 
 ## Requirements
 
